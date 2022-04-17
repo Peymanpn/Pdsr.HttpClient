@@ -1,0 +1,53 @@
+<Project>
+    <PropertyGroup>
+        <Version>3.5.1.445</Version>
+        <LangVersion>10.0</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Description>Pdsr HttpClient helper library</Description>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <Product />
+        <SourceRevisionId>$([System.DateTime]::UtcNow.ToString("yyyyMMddHHmmss"))</SourceRevisionId>
+        <Copyright>© $([System.DateTime]::UtcNow.ToString("yyyy")) Peyman.R</Copyright>
+        <Authors><![CDATA[Peyman Ranjbar <peymanpn@yahoo.com>]]></Authors>
+    </PropertyGroup>
+
+    <PropertyGroup Label="Package Info files">
+        <Title>Pdsr.Http</Title>
+        <PackageVersion>$(Version)</PackageVersion>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageIcon>pdsr-logo-128.png</PackageIcon>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+        <PackageProjectUrl>https://github.com/Peymanpn/Pdsr.HttpClient</PackageProjectUrl>
+        <RepositoryType>git</RepositoryType>
+        <RepositoryUrl>https://github.com/Peymanpn/Pdsr.HttpClient</RepositoryUrl>
+        <PackageTags>Http;PdsrHttp;HttpClient;HttpHelper</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="../../pdsr-logo-128.png">
+            <Pack>True</Pack>
+            <PackagePath></PackagePath>
+        </None>
+
+        <None Include="../../README.md">
+            <Pack>True</Pack>
+            <PackagePath></PackagePath>
+        </None>
+
+
+        <None Include="../../LICENSE.md">
+            <Pack>True</Pack>
+            <PackagePath></PackagePath>
+        </None>
+    </ItemGroup>
+
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+        <SignAssembly>True</SignAssembly>
+        <AssemblyOriginatorKeyFile>../../key.snk</AssemblyOriginatorKeyFile>
+    </PropertyGroup>
+</Project>
