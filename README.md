@@ -1,6 +1,8 @@
 # Pdsr HttpClient Helper
 
-A helper library for using with Http Api Calls
+A helper library to use with HTTP API Calls
+
+[![.NET](https://github.com/Peymanpn/Pdsr.HttpClient/actions/workflows/dotnet.yml/badge.svg)](https://github.com/Peymanpn/Pdsr.HttpClient/actions/workflows/dotnet.yml)
 
 ## Getting Started
 
@@ -44,7 +46,7 @@ public class SomeService
 }
 ```
 
-you need to override the abstract methods `GetAuthorizationHeader` if your api needs authentication and implement the authorization logic there.
+you need to override the abstract method `GetAuthorizationHeader` if your API needs authentication and implement the authorization logic there.
 
 ```csharp
 protected abstract Task SetAuthorizationHeader(HttpRequestMessage request, CancellationToken cancellationToken = default);
