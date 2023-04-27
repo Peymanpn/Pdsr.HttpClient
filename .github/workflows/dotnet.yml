@@ -2,18 +2,20 @@ name: .NET
 
 on:
   push:
-    branches: [ main ]
+    branches:
+    - main
   pull_request:
-    branches: [ main ]
+    branches:
+    - main
+    - '*'
+
 env:
   CI: 'true'
   DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
       with:
@@ -23,27 +25,23 @@ jobs:
       with:
         dotnet-version: 7.0.x
     - name: Restore dependencies
-      run: dotnet restore
-    - name: Get existing tag
-      id: existingtag
-      uses: WyriHaximus/github-action-get-previous-tag@0.2.0
-      continue-on-error: true
+      run: dotnet restore -v n
     - name: signing key
       run: echo ${{ secrets.SNKEY }} | base64 -d > key.snk
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build --no-restore -v n
     - name: Make packages
       run: |
-        dotnet pack --no-build --no-restore --output ./artifacts/ src/Pdsr.Http
-        dotnet pack --no-build --no-restore --output ./artifacts/ src/Pdsr.Http.Extensions
+        dotnet pack -v n --no-build --no-restore --output ./artifacts/ src/Pdsr.Http
+        dotnet pack -v n --no-build --no-restore --output ./artifacts/ src/Pdsr.Http.Extensions
     - name: Upload package artifacts
       uses: actions/upload-artifact@v2
+      if: github.ref == 'refs/heads/master'
       with:
         name: nuget-packages
         path: |
           **/*.nupkg
           **/*.snupkg
     - name: Publish packages
-      # if: env.NEWTAG != steps.existingtag.outputs.tag
+      if: github.ref == 'refs/heads/master'
       run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate --api-key ${{ secrets.NUGET_API_KEY }}
-
