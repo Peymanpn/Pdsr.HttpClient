@@ -5,6 +5,11 @@ namespace Pdsr.Http;
 public static class PdsrClientDefaults
 {
     /// <summary>
+    /// Default HttpClient name
+    /// </summary>
+    public const string DefaultClientName = "httpClient";
+
+    /// <summary>
     /// Default Serializer options
     /// </summary>
     public static JsonSerializerOptions DefaultSerializer

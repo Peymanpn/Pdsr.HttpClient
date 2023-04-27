@@ -4,18 +4,40 @@ public static partial class PdsrClientExtensions
 {
     #region Handlers
 
+    /// <summary>
+    /// The <see cref="Func{HttpResponseMessage, CancellationToken, Task}"/> happens in any circumstance
+    /// </summary>
+    /// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
+    /// <param name="client">The underlying httpClient</param>
+    /// <param name="handler">The Func to invoke</param>
+    /// <returns>Retruns the same past client with the Func injected as delegate method</returns>
     public static TClient OnAnyResponse<TClient>(this TClient client, Func<HttpResponseMessage, CancellationToken, Task> handler)
         where TClient : IPdsrClientBase
     {
         client.ConfigClient(c => c.HandleStatusCodeBase += handler);
         return client;
     }
+
+    /// <summary>
+    /// The <see cref="Action{HttpResponseMessage}"/> happens in any circumstance
+    /// </summary>
+    /// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
+    /// <param name="client">The underlying httpClient</param>
+    /// <param name="handler">The Action to invoke</param>
+    /// <returns>Retruns the same past client with the Func injected as delegate method</returns>
     public static TClient OnAnyResponse<TClient>(this TClient client, Action<HttpResponseMessage> handler)
         where TClient : IPdsrClientBase
     {
         return client.OnAnyResponse((res, c) => { handler(res); return Task.CompletedTask; });
     }
 
+    /// <summary>
+    /// The <see cref="GeneralStatusHandler"/> invokation happens in any circumstance
+    /// </summary>
+    /// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
+    /// <param name="client">The underlying httpClient</param>
+    /// <param name="handler">The Func to invoke</param>
+    /// <returns>Retruns the same past client with the Func injected as delegate method</returns>
     public static TClient OnAnyResponse<TClient>(this TClient client, GeneralStatusHandler handler)
         where TClient : IPdsrClientBase
     {
@@ -26,6 +48,13 @@ public static partial class PdsrClientExtensions
         });
     }
 
+    /// <summary>
+    /// The <see cref="AsyncGeneralStatusHandler"/> invokation happens in any circumstance
+    /// </summary>
+    /// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
+    /// <param name="client">The underlying httpClient</param>
+    /// <param name="handler">The Func to invoke</param>
+    /// <returns>Retruns the same past client with the Func injected as delegate method</returns>
     public static TClient OnAnyResponse<TClient>(this TClient client, AsyncGeneralStatusHandler handler)
         where TClient : IPdsrClientBase
     {
@@ -38,6 +67,14 @@ public static partial class PdsrClientExtensions
 
     #region BadRequest
 
+    /// <summary>
+    /// Returns the Deserialized TError Model from response.
+    /// If the response contents is null, returns null
+    /// </summary>
+    /// <typeparam name="TError">Type of the model to deserialize</typeparam>
+    /// <param name="response">an instance HttpResponseMessage containing server response message</param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
     internal static async ValueTask<TError?> GetBadRequestModel<TError>(HttpResponseMessage response, CancellationToken cancellationToken = default)
     {
         var stream = await response.Content.ReadAsStreamAsync(
