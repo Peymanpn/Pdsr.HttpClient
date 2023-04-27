@@ -6,7 +6,7 @@ using System.Text.Json;
 namespace Pdsr.Http;
 
 /// <summary>
-/// Abstraction of <see cref="IPdsrClientBase"/> with default implementaions.
+/// Abstraction of <see cref="IPdsrClientBase"/> with default implementations.
 /// </summary>
 public abstract class PdsrClientBase : IPdsrClientBase
 {
@@ -15,13 +15,17 @@ public abstract class PdsrClientBase : IPdsrClientBase
     private bool _isRetrying;
     protected int _retryCount = 5;
 
+    /// <summary>
+    /// Ctor
+    /// </summary>
+    /// <param name="client">HttpClient</param>
+    /// <param name="loggerFactory">Instance of Logger factory</param>
     public PdsrClientBase(HttpClient client, ILoggerFactory loggerFactory)
     {
         _client = client;
         _logger = loggerFactory.CreateLogger<PdsrClientBase>();
         QueryParameters ??= new Dictionary<string, string>();
     }
-
 
     #region Properties
     protected bool CallLogClientInteractions { get; set; } = false;
@@ -74,9 +78,9 @@ public abstract class PdsrClientBase : IPdsrClientBase
     #endregion
 
     /// <inheritdoc/>
-    public virtual Task<string?> GetString(CancellationToken cancellationToken = default)
+    public virtual async Task<string?> GetString(CancellationToken cancellationToken = default)
     {
-        return GetString(cancellationToken: cancellationToken, requestUrl: null, dontAuthenticate: true);
+        return await GetString(cancellationToken: cancellationToken, requestUrl: null, dontAuthenticate: true);
     }
 
     /// <inheritdoc/>
@@ -121,9 +125,9 @@ public abstract class PdsrClientBase : IPdsrClientBase
     }
 
     /// <inheritdoc/>
-    public virtual Task<T?> SendAsync<T>(CancellationToken cancellationToken = default)
+    public virtual async Task<T?> SendAsync<T>(CancellationToken cancellationToken = default)
     {
-        var task = SendAsync<T>(cancellationToken: cancellationToken, requestUrl: null, dontAuthenticate: false);
+        var task = await SendAsync<T>(cancellationToken: cancellationToken, requestUrl: null, dontAuthenticate: false);
         return task;
     }
 
@@ -289,9 +293,9 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
     }
 
-    protected private virtual ValueTask<T?> Deserialize<T>(Stream stream, CancellationToken cancellationToken = default)
+    protected private virtual async ValueTask<T?> Deserialize<T>(Stream stream, CancellationToken cancellationToken = default)
     {
-        return JsonSerializer.DeserializeAsync<T>(stream, SerializerOptions, cancellationToken);
+        return await JsonSerializer.DeserializeAsync<T>(stream, SerializerOptions, cancellationToken);
     }
 
     #region IDisposable
@@ -350,4 +354,34 @@ public abstract class PdsrClientBase : IPdsrClientBase
     {
         _logger.Log(logLevel, message, args);
     }
+}
+
+
+/// <summary>
+/// Abstraction of <see cref="PdsrClientBase"/> with named clients
+/// </summary>
+/// <typeparam name="TConfig"><see cref="IPdsrClientConfigs"/> type for client configurations</typeparam>
+public abstract class PdsrNamedClientBase<TConfig> : PdsrClientBase
+    where TConfig : IPdsrClientConfigs
+{
+    /// <inheritdoc/>
+    protected PdsrNamedClientBase(HttpClient client, ILoggerFactory loggerFactory)
+        : base(client, loggerFactory)
+    {
+    }
+
+
+    /// <summary>
+    /// Using <see cref="IHttpClientFactory"/> instead of using unnamed <see cref="HttpClient" />
+    /// To Use the named client, the type <see cref="PdsrClientConfigs"/> must be injected to DI
+    /// and <see cref="PdsrClientConfigs.ClientName"/> must be initialized.
+    /// </summary>
+    /// <param name="httpClientFactory">Client Factory, with named clients</param>
+    /// <param name="loggerFactory">Instance of Logger factory</param>
+    /// <param name="clientConfigs">PdsrClientConfigurations, must be injected to the DI if you plan to use named clients</param>
+    public PdsrNamedClientBase(IHttpClientFactory httpClientFactory, ILoggerFactory loggerFactory, TConfig clientConfigs)
+        : base(httpClientFactory.CreateClient(clientConfigs.ClientName), loggerFactory)
+    {
+    }
+
 }
