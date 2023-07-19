@@ -4,6 +4,8 @@ A helper library to use with HTTP API Calls
 
 [![.NET](https://github.com/Peymanpn/Pdsr.HttpClient/actions/workflows/dotnet.yml/badge.svg)](https://github.com/Peymanpn/Pdsr.HttpClient/actions/workflows/dotnet.yml)
 
+[![NuGet version (Pdsr.Http)](https://img.shields.io/nuget/v/Pdsr.Http.svg?style=flat-square)](https://www.nuget.org/packages/Pdsr.Http/)
+
 ## Getting Started
 
 you need to install the package, add to DI and then use it in services.
