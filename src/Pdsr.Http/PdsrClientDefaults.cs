@@ -22,25 +22,13 @@ public static class PdsrClientDefaults
     /// <summary>
     /// CamelCase JsonSerializer
     /// </summary>
-    public static JsonSerializerOptions CamelCaseSerializer
+    public static JsonSerializerOptions CamelCaseSerializer => new JsonSerializerOptions
     {
-        get
-        {
-            return new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
-        }
-    }
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
 
-    public static JsonSerializerOptions SnakeSerializer
+    public static JsonSerializerOptions SnakeSerializer => new JsonSerializerOptions
     {
-        get
-        {
-            return new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = SnakeCaseNamingPolicy.SnakeCase
-            };
-        }
-    }
+        PropertyNamingPolicy = SnakeCaseNamingPolicy.SnakeCase
+    };
 }
