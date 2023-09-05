@@ -200,7 +200,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
         if (CallLogClientInteractions)
         {
-            await WriteLog(response, reqWatch.ElapsedMilliseconds);
+            await WriteLog(response, reqWatch.ElapsedMilliseconds, cancellationToken);
         }
 
         if (!response.IsSuccessStatusCode)
