@@ -1,7 +1,7 @@
 <Project>
     <PropertyGroup>
-        <Version>3.7.1</Version>
-        <LangVersion>11.0</LangVersion>
+        <Version>3.8.0-preview.1</Version>
+        <LangVersion>12.0</LangVersion>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <Description>Pdsr HttpClient helper library</Description>

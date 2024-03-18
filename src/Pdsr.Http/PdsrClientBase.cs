@@ -24,7 +24,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
     {
         _client = client;
         _logger = loggerFactory.CreateLogger<PdsrClientBase>();
-        QueryParameters ??= new Dictionary<string, string>();
+        QueryParameters ??= new Dictionary<string, string?>();
     }
 
     #region Properties
@@ -32,7 +32,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
     public Action<HttpRequestMessage>? ConfigRequestMessage { get; set; }
     public Action<IPdsrClientBase>? ConfigHttpClient { get; set; }
-    public IDictionary<string, string> QueryParameters { get; set; }
+    public IDictionary<string, string?> QueryParameters { get; set; }
     public string RequestUrlPath { get; set; } = "";
     public Func<HttpResponseMessage, CancellationToken, Task>? HandleStatusCodeBase { get; set; }
     public Func<HttpResponseMessage?, Exception, CancellationToken, Task>? HandleExceptionAsync { get; set; }

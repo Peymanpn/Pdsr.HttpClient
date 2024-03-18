@@ -56,7 +56,7 @@ public interface IPdsrClientBase : IDisposable
     /// <summary>
     /// Query Parameters to be added to request url
     /// </summary>
-    IDictionary<string, string> QueryParameters { get; set; }
+    IDictionary<string, string?> QueryParameters { get; set; }
 
     /// <summary>
     /// Request Url to added.

@@ -69,7 +69,7 @@ public static partial class PdsrClientExtensions
         where TClient : IPdsrClientBase
     {
         if (client.QueryParameters == null)
-            client.QueryParameters = new Dictionary<string, string>();
+            client.QueryParameters = new Dictionary<string, string?>();
         else
             client.QueryParameters.Clear();
         return client;
@@ -108,7 +108,7 @@ public static partial class PdsrClientExtensions
             throw new ArgumentException($"'{nameof(value)}' cannot be null or empty.", nameof(value));
         }
 
-        if (client.QueryParameters == null) client.QueryParameters = new Dictionary<string, string>();
+        if (client.QueryParameters == null) client.QueryParameters = new Dictionary<string, string?>();
         if (client.QueryParameters.ContainsKey(key))
         {
             if (client.QueryParameters.Remove(key))
