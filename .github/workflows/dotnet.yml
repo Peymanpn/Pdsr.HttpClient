@@ -17,11 +17,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: Setup .NET
-      uses: actions/setup-dotnet@v2
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 8.0.x
     - name: Restore dependencies
@@ -29,13 +29,13 @@ jobs:
     - name: signing key
       run: echo ${{ secrets.SNKEY }} | base64 -d > key.snk
     - name: Build
-      run: dotnet build --no-restore -v n
+      run: dotnet build --configuration Release --no-restore -v n
     - name: Make packages
       run: |
-        dotnet pack -v n --no-build --no-restore --output ./artifacts/ src/Pdsr.Http
-        dotnet pack -v n --no-build --no-restore --output ./artifacts/ src/Pdsr.Http.Extensions
+        dotnet pack --verbosity normal --no-build --no-restore --output ./artifacts/ src/Pdsr.Http
+        dotnet pack --verbosity normal --no-build --no-restore --output ./artifacts/ src/Pdsr.Http.Extensions
     - name: Upload package artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v4
       if: github.ref == 'refs/heads/main'
       with:
         name: nuget-packages
