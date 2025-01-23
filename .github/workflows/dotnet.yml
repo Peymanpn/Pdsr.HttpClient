@@ -25,15 +25,15 @@ jobs:
       with:
         dotnet-version: 8.0.x
     - name: Restore dependencies
-      run: dotnet restore -v n
+      run: dotnet restore --verbosity normal
     - name: signing key
       run: echo ${{ secrets.SNKEY }} | base64 -d > key.snk
     - name: Build
       run: dotnet build --configuration Release --no-restore -v n
     - name: Make packages
       run: |
-        dotnet pack --verbosity normal --no-build --no-restore --output ./artifacts/ src/Pdsr.Http
-        dotnet pack --verbosity normal --no-build --no-restore --output ./artifacts/ src/Pdsr.Http.Extensions
+        dotnet pack --verbosity normal --no-build --no-restore --configuration Release --output ./artifacts/ src/Pdsr.Http
+        dotnet pack --verbosity normal --no-build --no-restore --configuration Release --output ./artifacts/ src/Pdsr.Http.Extensions
     - name: Upload package artifacts
       uses: actions/upload-artifact@v4
       if: github.ref == 'refs/heads/main'
