@@ -55,13 +55,12 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// <summary>
     /// Deserialize client output contents
     /// </summary>
-    private protected virtual JsonSerializerOptions SerializerOptions =>
-        NamingStrategy == SerializationNamingStrategy.Camel
-        ?
-        PdsrClientDefaults.CamelCaseSerializer
-        :
-        PdsrClientDefaults.SnakeSerializer
-        ;
+    private protected virtual JsonSerializerOptions SerializerOptions => NamingStrategy switch
+    {
+        SerializationNamingStrategy.Camel => PdsrClientDefaults.CamelCaseSerializer,
+        SerializationNamingStrategy.Snake => PdsrClientDefaults.SnakeSerializer,
+        _ => PdsrClientDefaults.DefaultSerializer,
+    };
 
     #region Client Capsulation
 
