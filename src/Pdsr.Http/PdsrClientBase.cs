@@ -140,7 +140,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// Add the required logic for authorization by implementing this method
     /// </summary>
     /// <param name="request">Instance of HttpRequestMessage.
-    /// Authorization token should be added to request if each request needs diffrenet authorization. otherwise can add to the HttpClient</param>
+    /// Authorization token should be added to request if each request needs different authorization. otherwise can add to the HttpClient</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     protected abstract Task SetAuthorizationHeader(HttpRequestMessage request, CancellationToken cancellationToken = default);
@@ -239,7 +239,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
             // --> retry
             _logger.LogTrace("Attempting to send retry request for cloned request {clonedRequest}", retryRequest);
             response = await ConfigAndSend(retryRequest, cancellationToken);
-            _logger.LogDebug("Retry Request has been sent and got {retryRtatus} with response {retryResponse}", response.StatusCode, response);
+            _logger.LogDebug("Retry Request has been sent and got {retryStatus} with response {retryResponse}", response.StatusCode, response);
             // <-- retry
 
             return response;
