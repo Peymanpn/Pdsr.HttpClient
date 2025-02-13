@@ -1,29 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0</TargetFrameworks>
-    <Nullable>enable</Nullable>
-    <Authors>Peyman Ranjbar &lt;peymanpn@yahoo.com&gt;</Authors>
-    <SourceRevisionId>$([System.DateTime]::UtcNow.ToString("yyyyMMddHHmmss"))</SourceRevisionId>
-    <Copyright>© $([System.DateTime]::UtcNow.ToString("yyyy")) Peyman.R</Copyright>
-    <Description>Http and HttpClient extensions</Description>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
-
   <ItemGroup>
     <Using Include="System.Net" />
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' != 'net8.0'" Label="Netstandard Package Dependencies">
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' OR '$(TargetFramework)' == 'netstandard2.1'" Label="Netstandard Package Dependencies">
     <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="2.2.0" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'" Label="NET 8 Package Dependencies">
     <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.5" />
   </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'" Label="NET 8 Package Dependencies">
+    <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="9.0.2" />
+  </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.2" />
+    <PackageReference Include="System.Text.Json" Version="9.0.2" />
   </ItemGroup>
 
 </Project>

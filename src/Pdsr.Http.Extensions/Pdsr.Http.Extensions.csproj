@@ -1,15 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0</TargetFrameworks>
-    <Nullable>enable</Nullable>
-    <Authors>Peyman Ranjbar &lt;peymanpn@yahoo.com&gt;</Authors>
-    <SourceRevisionId>$([System.DateTime]::UtcNow.ToString("yyyyMMddHHmmss"))</SourceRevisionId>
-    <Copyright>© $([System.DateTime]::UtcNow.ToString("yyyy")) Peyman.R</Copyright>
-    <Description>HttpClient Helper extensions</Description>
-    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
-  </PropertyGroup>
-
   <ItemGroup>
     <Using Include="System.Net" />
     <Using Include="System.Net.Http" />
