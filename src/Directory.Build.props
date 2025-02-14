@@ -2,7 +2,7 @@
     <PropertyGroup>
         <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net9.0</TargetFrameworks>
         <Nullable>enable</Nullable>
-        <Version>3.8.0-preview.5</Version>
+        <Version>3.8.0</Version>
         <LangVersion>13.0</LangVersion>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
