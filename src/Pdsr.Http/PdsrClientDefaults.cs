@@ -2,6 +2,9 @@ using System.Text.Json;
 
 namespace Pdsr.Http;
 
+/// <summary>
+/// HttpClient Default values
+/// </summary>
 public static class PdsrClientDefaults
 {
     /// <summary>
@@ -27,6 +30,9 @@ public static class PdsrClientDefaults
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    /// <summary>
+    /// SnakeCase JsonSerializer
+    /// </summary>
     public static JsonSerializerOptions SnakeSerializer => new JsonSerializerOptions
     {
         PropertyNamingPolicy = SnakeCaseNamingPolicy.SnakeCase

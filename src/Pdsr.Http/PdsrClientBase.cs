@@ -195,38 +195,30 @@ public abstract class PdsrClientBase : IPdsrClientBase
             }
         }
 
-
-
-        if (CallLogClientInteractions)
-        {
-            await WriteLog(response, reqWatch.ElapsedMilliseconds, cancellationToken);
-        }
+        await WriteLog(response, reqWatch.ElapsedMilliseconds, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("{statusCode}" + Environment.NewLine +
-                "request:{@request}" + Environment.NewLine +
-                "response: {@response}", response.StatusCode, request, response);
+            _logger.LogWarning("{statusCode}\nRequest:{@request}\nResponse: {@response}", response.StatusCode, request, response);
 
             var contents = await response.Content.ReadAsStringAsync();
             _logger.LogWarning("Error Response, contents: {contents}", contents);
         }
         else
         {
-            _logger.LogTrace(response.StatusCode.ToString() + ": " + Environment.NewLine +
-                "request: {@request}" + Environment.NewLine +
-                "response:{@response}", request, response);
+            _logger.LogTrace("{StatusCode}\nRequest: {@Request}\nResponse{@Response}", response.StatusCode, request, response);
         }
 
 
-        await ExecuteStatusCodeHandlersInsternal(response, cancellationToken);
+        await ExecuteStatusCodeHandlersInternal(response, cancellationToken);
 
         while (await IsRetryRequired(response, cancellationToken) && _retryCount > 0)
         {
             // clone the request
             var retryRequest = Extensions.HttpRequestMessageExtensions.Clone(request);
 
-            _logger.LogInformation("Retrying the Request, retries count remained: {retries}, previous status was: {status}" + Environment.NewLine +
+            _logger.LogInformation("Retrying the Request {url}, retries count remained: {retries}", retryRequest.RequestUri, _retryCount - 1);
+            _logger.LogDebug("Retrying the Request, retries count remained: {retries}, previous status was: {status}" + Environment.NewLine +
                 "request:{@request}" + Environment.NewLine +
                 "response: {@response}", _retryCount - 1, response.StatusCode, request, response);
 
@@ -253,33 +245,62 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
     }
 
-    protected virtual async Task<bool> ExecuteStatusCodeHandlersInsternal(HttpResponseMessage? response, CancellationToken cancellationToken = default)
+    protected virtual async Task<bool> ExecuteStatusCodeHandlersInternal(
+        HttpResponseMessage? response,
+        CancellationToken cancellationToken = default)
     {
-        if (response is null || HandleStatusCodeBase is null) return false;
-        var statusCodeHandlers = HandleStatusCodeBase.GetInvocationList();
-        foreach (Func<HttpResponseMessage, CancellationToken, Task> del in statusCodeHandlers)
+        if (response is null || HandleStatusCodeBase is null)
         {
-            _logger.LogTrace("Executing status code handler");
-            await del(response, cancellationToken);
-            _logger.LogTrace("Executed status code handler");
+            return false;
         }
+
+        // Obtain a snapshot of the registered handlers
+        var handlers = HandleStatusCodeBase
+            .GetInvocationList()
+            .OfType<Func<HttpResponseMessage, CancellationToken, Task>>();
+
+        foreach (var handler in handlers)
+        {
+            // Respect cancellation requests between handlers.
+            cancellationToken.ThrowIfCancellationRequested();
+
+            _logger.LogTrace("Executing status code handler {HandlerName}", handler.Method.Name);
+            await handler(response, cancellationToken).ConfigureAwait(false);
+            _logger.LogTrace("Executed status code handler {HandlerName}", handler.Method.Name);
+        }
+
         return true;
     }
 
-    protected virtual async ValueTask<bool> ExecuteExceptionHandlersInternal(HttpResponseMessage? response, Exception exception, CancellationToken cancellationToken = default)
-    {
-        if (HandleExceptionAsync is null) return false;
 
-        var handlers = HandleExceptionAsync.GetInvocationList();
-        foreach (Func<HttpResponseMessage?, Exception, CancellationToken, Task> method in handlers)
+    protected virtual async ValueTask<bool> ExecuteExceptionHandlersInternal(
+        HttpResponseMessage? response,
+        Exception exception,
+        CancellationToken cancellationToken = default)
+    {
+        if (HandleExceptionAsync is null)
         {
-            _logger.LogTrace("Executing exception handler.");
-            await method(response, exception, cancellationToken);
-            _logger.LogTrace("Executed exception handler.");
+            return false;
+        }
+
+        // Retrieve a snapshot of registered exception handlers.
+        var handlers = HandleExceptionAsync
+            .GetInvocationList()
+            .OfType<Func<HttpResponseMessage?, Exception, CancellationToken, Task>>();
+
+        foreach (var handler in handlers)
+        {
+            // Check for cancellation between handler executions.
+            cancellationToken.ThrowIfCancellationRequested();
+
+            _logger.LogTrace("Executing exception handler {HandlerName}", handler.Method.Name);
+            await handler(response, exception, cancellationToken).ConfigureAwait(false);
+            _logger.LogTrace("Executed exception handler {HandlerName}", handler.Method.Name);
         }
 
         return true;
     }
+
 
 
     protected private virtual void ClearConfigs()
@@ -289,7 +310,6 @@ public abstract class PdsrClientBase : IPdsrClientBase
         HandleExceptionAsync = null;
         HandleStatusCodeBase = null;
         RequestUrlPath = string.Empty;
-
     }
 
     protected private virtual async ValueTask<T?> Deserialize<T>(Stream stream, CancellationToken cancellationToken = default)
@@ -298,7 +318,8 @@ public abstract class PdsrClientBase : IPdsrClientBase
     }
 
     #region IDisposable
-    private bool disposed = false; // to detect redundant calls
+    private bool disposed = false; // To detect redundant calls
+
     public void Dispose()
     {
         Dispose(true);
@@ -307,31 +328,28 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
     protected virtual void Dispose(bool disposing)
     {
-        if (!disposed)
+        if (disposed)
         {
-            if (disposing)
-            {
-                // Dispose managed resources.
-                _client?.Dispose();
-            }
-
+            return;
         }
+
+        if (disposing)
+        {
+            // Dispose managed resources.
+            _client?.Dispose();
+        }
+
         disposed = true;
-
-
-        // base class's Dispose(Boolean) method
-        //Dispose();
     }
-
-
     #endregion
+
 
 
 #if NETSTANDARD2_0
 
     public virtual async Task<bool> ExecuteStatusCodeHandlers(HttpResponseMessage? response, CancellationToken cancellationToken)
     {
-        return await ExecuteStatusCodeHandlersInsternal(response, cancellationToken);
+        return await ExecuteStatusCodeHandlersInternal(response, cancellationToken);
     }
 
     public virtual async Task<bool> ExecuteExceptionHandlers(HttpResponseMessage? response, Exception exception, CancellationToken cancellationToken)
@@ -347,7 +365,10 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// <param name="response">previously sent response</param>
     /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
     /// <returns>Returns a boolean indicates if retry needs to be done or not.</returns>
-    protected abstract Task<bool> IsRetryRequired(HttpResponseMessage response, CancellationToken cancellationToken = default);
+    protected virtual Task<bool> IsRetryRequired(HttpResponseMessage response, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(false);
+    }
 
     public virtual void Log(LogLevel logLevel, string message, params object[] args)
     {
