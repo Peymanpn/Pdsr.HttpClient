@@ -28,8 +28,6 @@ public abstract class PdsrClientBase : IPdsrClientBase
     }
 
     #region Properties
-    protected bool CallLogClientInteractions { get; set; } = false;
-
     public Action<HttpRequestMessage>? ConfigRequestMessage { get; set; }
     public Action<IPdsrClientBase>? ConfigHttpClient { get; set; }
     public IDictionary<string, string?> QueryParameters { get; set; }
