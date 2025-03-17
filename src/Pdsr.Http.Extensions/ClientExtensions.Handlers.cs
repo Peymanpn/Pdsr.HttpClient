@@ -182,9 +182,9 @@ public static partial class PdsrClientExtensions
         {
             if (((int)res.StatusCode) == statusCode)
             {
-                client.Log(LogLevel.Debug, "Attempting to execute status handler code {code} for response {response}", res.StatusCode, res);
+                client.Log(LogLevel.Debug, "Attempting to execute status handler code {Code} for response {Response}", res.StatusCode, res);
                 await handler(res, c);
-                client.Log(LogLevel.Debug, "Executed status handler code {code} for response {response}", res.StatusCode, res);
+                client.Log(LogLevel.Debug, "Executed status handler code {code} for response {@Response}", res.StatusCode, res);
             }
         });
     }

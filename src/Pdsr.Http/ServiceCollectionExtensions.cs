@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using System.Runtime.InteropServices;
 
 namespace Pdsr.Http;
 
@@ -13,7 +14,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">Service collection</param>
     /// <param name="clientConfigs">HttpClient configurations</param>
-    /// <returns>an Instance of <see cref="IHttpClientBuilder"/> with registerd <see cref="HttpClient"/></returns>
+    /// <returns>an Instance of <see cref="IHttpClientBuilder"/> with registered <see cref="HttpClient"/></returns>
     public static IHttpClientBuilder AddPdsrClient(this IServiceCollection services, IPdsrClientConfigs? clientConfigs)
     {
         clientConfigs ??= new PdsrClientConfigs();
@@ -29,12 +30,22 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">Service collection</param>
     /// <param name="clientConfigs">HttpClient configurations</param>
-    /// <returns>an Instance of <see cref="IHttpClientBuilder"/> with registerd <see cref="HttpClient"/></returns>
+    /// <returns>an Instance of <see cref="IHttpClientBuilder"/> with registered <see cref="HttpClient"/></returns>
     public static IHttpClientBuilder AddPdsrClient<TConfig>(this IServiceCollection services, TConfig clientConfigs)
         where TConfig : IPdsrClientConfigs
     {
         var builder = services.AddHttpClient(clientConfigs.ClientName);
 
         return builder;
+    }
+
+    public static IHttpClientBuilder AddPdsrClient<TClientInterface, TClient>(this IServiceCollection services, IPdsrClientConfigs? clientConfigs = null)
+        where TClientInterface : class
+        where TClient : class, TClientInterface
+    {
+        clientConfigs ??= new PdsrClientConfigs();
+
+        services.AddScoped<TClientInterface, TClient>();
+        return services.AddPdsrClient(clientConfigs);
     }
 }

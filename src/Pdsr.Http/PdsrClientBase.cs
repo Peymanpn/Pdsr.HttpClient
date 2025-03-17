@@ -53,7 +53,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// <summary>
     /// Deserialize client output contents
     /// </summary>
-    private protected virtual JsonSerializerOptions SerializerOptions => NamingStrategy switch
+    protected virtual JsonSerializerOptions SerializerOptions => NamingStrategy switch
     {
         SerializationNamingStrategy.Camel => PdsrClientDefaults.CamelCaseSerializer,
         SerializationNamingStrategy.Snake => PdsrClientDefaults.SnakeSerializer,
@@ -61,15 +61,41 @@ public abstract class PdsrClientBase : IPdsrClientBase
     };
 
     #region Client Capsulation
-
+    /// <summary>
+    /// Sends an HTTP request asynchronously.
+    /// </summary>
+    /// <param name="request">The HTTP request message to send.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual Task<HttpResponseMessage> SendAsync(HttpRequestMessage request) => _client.SendAsync(request);
 
+    /// <summary>
+    /// Sends an HTTP request asynchronously.
+    /// </summary>
+    /// <param name="request">The HTTP request message to send.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation, containing the HTTP response message.</returns>
     public virtual Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken = default) => _client.SendAsync(request, cancellationToken);
 
+    /// <summary>
+    /// Sends an HTTP request asynchronously with a specified completion option.
+    /// </summary>
+    /// <param name="request">The HTTP request message to send.</param>
+    /// <param name="completionOption">A value that indicates when the operation should complete.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, HttpCompletionOption completionOption) => _client.SendAsync(request, completionOption);
 
+    /// <summary>
+    /// Sends an HTTP request asynchronously.
+    /// </summary>
+    /// <param name="request">The HTTP request message to send.</param>
+    /// <param name="completionOption">A value that indicates when the operation should complete.</param>
+    /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
     public virtual Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationToken cancellationToken = default) => _client.SendAsync(request, completionOption, cancellationToken);
 
+    /// <summary>
+    /// Wrapped HttpClient BaseAddress
+    /// </summary>
     protected virtual Uri? BaseAddress { get => _client.BaseAddress; set => _client.BaseAddress = value; }
 
     #endregion
@@ -87,7 +113,11 @@ public abstract class PdsrClientBase : IPdsrClientBase
         using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, RequestUrlPath);
         var response = await ConfigAndSend(request, cancellationToken);
 
+#if NET6_0_OR_GREATER
+        Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+#else
         Stream stream = await response.Content.ReadAsStreamAsync();
+#endif
         return stream;
 
     }
@@ -149,10 +179,13 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// <param name="response">instance of the sent request message</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    protected abstract Task WriteLog(HttpResponseMessage response, long ellapsed, CancellationToken cancellationToken = default);
+    protected virtual Task WriteLog(HttpResponseMessage response, long elapsed, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
+    }
 
     /// <summary>
-    /// Main method to sends use the delegates and configures boths request and client.
+    /// Main method to sends use the delegates and configures both request and client.
     /// </summary>
     /// <returns>The response after sending the request</returns>
     protected virtual async Task<HttpResponseMessage> ConfigAndSend(HttpRequestMessage request, CancellationToken cancellationToken = default)
@@ -197,7 +230,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("{statusCode}\nRequest:{@request}\nResponse: {@response}", response.StatusCode, request, response);
+            _logger.LogWarning("{StatusCode}\nRequest:{@Request}\nResponse: {@Response}", response.StatusCode, request, response);
 
             var contents = await response.Content.ReadAsStringAsync();
             _logger.LogWarning("Error Response, contents: {contents}", contents);
@@ -215,10 +248,8 @@ public abstract class PdsrClientBase : IPdsrClientBase
             // clone the request
             var retryRequest = Extensions.HttpRequestMessageExtensions.Clone(request);
 
-            _logger.LogInformation("Retrying the Request {url}, retries count remained: {retries}", retryRequest.RequestUri, _retryCount - 1);
-            _logger.LogDebug("Retrying the Request, retries count remained: {retries}, previous status was: {status}" + Environment.NewLine +
-                "request:{@request}" + Environment.NewLine +
-                "response: {@response}", _retryCount - 1, response.StatusCode, request, response);
+            _logger.LogInformation("Retrying the Request {Url}, retries remained: {Retries}", retryRequest.RequestUri, _retryCount - 1);
+            _logger.LogDebug("Retrying the Request, retries count remained: {Retries}, previous status was: {StatusCode}\nRequest:{@Request}\nResponse: {@response}", _retryCount - 1, response.StatusCode, request, response);
 
             // indicate that the consequent requests would be retries.
             _isRetrying = true;
@@ -227,9 +258,9 @@ public abstract class PdsrClientBase : IPdsrClientBase
             _retryCount--;
 
             // --> retry
-            _logger.LogTrace("Attempting to send retry request for cloned request {clonedRequest}", retryRequest);
+            _logger.LogTrace("Attempting to send retry request for cloned request {ClonedRequest}", retryRequest);
             response = await ConfigAndSend(retryRequest, cancellationToken);
-            _logger.LogDebug("Retry Request has been sent and got {retryStatus} with response {retryResponse}", response.StatusCode, response);
+            _logger.LogDebug("Retry Request has been sent and got {RetryStatus} with response {@RetryResponse}", response.StatusCode, response);
             // <-- retry
 
             return response;
@@ -301,7 +332,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
 
 
-    protected private virtual void ClearConfigs()
+    protected virtual void ClearConfigs()
     {
         ConfigHttpClient = null;
         ConfigRequestMessage = null;
@@ -310,7 +341,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
         RequestUrlPath = string.Empty;
     }
 
-    protected private virtual async ValueTask<T?> Deserialize<T>(Stream stream, CancellationToken cancellationToken = default)
+    protected virtual async ValueTask<T?> Deserialize<T>(Stream stream, CancellationToken cancellationToken = default)
     {
         return await JsonSerializer.DeserializeAsync<T>(stream, SerializerOptions, cancellationToken);
     }
@@ -358,9 +389,9 @@ public abstract class PdsrClientBase : IPdsrClientBase
 #endif
 
     /// <summary>
-    /// Determines if we need to resend the request.
+    /// Determines if we need to retry the request.
     /// </summary>
-    /// <param name="response">previously sent response</param>
+    /// <param name="response">Previously sent response</param>
     /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
     /// <returns>Returns a boolean indicates if retry needs to be done or not.</returns>
     protected virtual Task<bool> IsRetryRequired(HttpResponseMessage response, CancellationToken cancellationToken = default)
@@ -368,8 +399,14 @@ public abstract class PdsrClientBase : IPdsrClientBase
         return Task.FromResult(false);
     }
 
+    /// <summary>
+    /// Logs a message at the specified log level.
+    /// </summary>
+    /// <param name="logLevel">The level at which to log the message.</param>
+    /// <param name="message">The message to be logged.</param>
+    /// <param name="args">Optional arguments to be used in formatting the message.</param>
     public virtual void Log(LogLevel logLevel, string message, params object[] args)
     {
-        _logger.Log(logLevel, message, args);
+        _logger.Log(logLevel: logLevel, message: message, args: args);
     }
 }
