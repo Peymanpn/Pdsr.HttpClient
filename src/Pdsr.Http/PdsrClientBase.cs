@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text.Json;
@@ -12,13 +11,23 @@ public abstract class PdsrClientBase : IPdsrClientBase
 {
     private readonly HttpClient _client;
     private readonly ILogger<PdsrClientBase> _logger;
-    private bool _isRetrying;
+
+    /// <summary>
+    /// Maximum number of retries for a single request, used while <see cref="IsRetryRequired"/> returns true.
+    /// </summary>
     protected int _retryCount = 5;
+
+    // Number of public entry points (GetString, GetStream, SendAsync<T>) currently running.
+    // The outermost one clears the per-request state when it completes, successfully or not.
+    private int _requestDepth;
+
+    // NamingStrategy before the per-request configuration ran; restored by ClearConfigs.
+    private SerializationNamingStrategy? _namingStrategyBeforeRequest;
 
     /// <summary>
     /// Ctor
     /// </summary>
-    /// <param name="client">HttpClient</param>
+    /// <param name="client">HttpClient. It is not disposed by this instance.</param>
     /// <param name="loggerFactory">Instance of Logger factory</param>
     public PdsrClientBase(HttpClient client, ILoggerFactory loggerFactory)
     {
@@ -37,15 +46,15 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
     /// <summary>
     /// If true, it throws an exception on any status lower than 200 and greater than 299.
-    /// can be set by <see cref="Pdsr.Http.ClientExtensions.EnsureSuccess()"/>
+    /// can be set by <see cref="Extensions.PdsrClientExtensions.EnsureSuccess{TClient}(TClient)"/>
     /// </summary>
     public bool EnsureSuccess { get; set; }
 
     /// <summary>
-    /// Naming strategy to use while deserialize.
+    /// Naming strategy to use while serializing and deserializing.
     /// default value <see cref="SerializationNamingStrategy.Camel"/>
     /// </summary>
-    public SerializationNamingStrategy NamingStrategy { get; set; }
+    public SerializationNamingStrategy NamingStrategy { get; set; } = SerializationNamingStrategy.Camel;
 
     #endregion
 
@@ -53,12 +62,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// <summary>
     /// Deserialize client output contents
     /// </summary>
-    protected virtual JsonSerializerOptions SerializerOptions => NamingStrategy switch
-    {
-        SerializationNamingStrategy.Camel => PdsrClientDefaults.CamelCaseSerializer,
-        SerializationNamingStrategy.Snake => PdsrClientDefaults.SnakeSerializer,
-        _ => PdsrClientDefaults.DefaultSerializer,
-    };
+    protected virtual JsonSerializerOptions SerializerOptions => PdsrClientDefaults.GetSerializerOptions(NamingStrategy);
 
     #region Client Capsulation
     /// <summary>
@@ -101,62 +105,52 @@ public abstract class PdsrClientBase : IPdsrClientBase
     #endregion
 
     /// <inheritdoc/>
-    public virtual async Task<Stream> GetStream(CancellationToken cancellationToken = default)
+    public virtual Task<Stream> GetStream(CancellationToken cancellationToken = default) => RunRequest(async () =>
     {
-
-        using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, RequestUrlPath);
-        var response = await ConfigAndSend(request, cancellationToken);
-
-#if NET6_0_OR_GREATER
-        Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-#else
-        Stream stream = await response.Content.ReadAsStreamAsync();
-#endif
-        return stream;
-
-    }
+        HttpResponseMessage response = await SendConfiguredRequest(cancellationToken).ConfigureAwait(false);
+        return await ReadAsStreamAsync(response.Content, cancellationToken).ConfigureAwait(false);
+    });
 
     /// <inheritdoc/>
-    public virtual async Task<string?> GetString(CancellationToken cancellationToken = default)
+    public virtual Task<string?> GetString(CancellationToken cancellationToken = default) => RunRequest<string?>(async () =>
     {
-        using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, RequestUrlPath);
-        using var response = await ConfigAndSend(request, cancellationToken);
-
-#if NET8_0_OR_GREATER
-        string contentString = await response.Content.ReadAsStringAsync(cancellationToken);
-#else
-        string contentString = await response.Content.ReadAsStringAsync();
-#endif
-        return contentString;
-    }
+        using HttpResponseMessage response = await SendConfiguredRequest(cancellationToken).ConfigureAwait(false);
+        return await ReadAsStringAsync(response.Content, cancellationToken).ConfigureAwait(false);
+    });
 
     /// <inheritdoc/>
-    public virtual async Task<T?> SendAsync<T>(CancellationToken cancellationToken = default)
+    public virtual Task<T?> SendAsync<T>(CancellationToken cancellationToken = default) => RunRequest<T?>(async () =>
     {
-        using Stream stream = await GetStream(cancellationToken);
-        try
+        using HttpResponseMessage response = await SendConfiguredRequest(cancellationToken).ConfigureAwait(false);
+
+        // Error bodies are not a T, and empty bodies (e.g. 204) have nothing to deserialize.
+        if (!response.IsSuccessStatusCode || response.Content is null || response.Content.Headers.ContentLength == 0)
         {
-            T? content = await Deserialize<T>(stream, cancellationToken);
-            return content;
-        }
-        catch (Exception)
-        {
-            if (EnsureSuccess)
-            {
-                throw;
-            }
             return default;
         }
-    }
+
+        using Stream stream = await ReadAsStreamAsync(response.Content, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await Deserialize<T>(stream, cancellationToken).ConfigureAwait(false);
+        }
+        catch (JsonException ex) when (!EnsureSuccess)
+        {
+            _logger.LogWarning(ex, "Could not deserialize the response of {Url} as {Type}", response.RequestMessage?.RequestUri, typeof(T));
+            return default;
+        }
+    });
 
     /// <summary>
     /// Logic to Sets the base address.
-    /// usually only for the first request per scope if it is null or not provided.
+    /// Called once per request, before it is sent. <see cref="HttpClient.BaseAddress"/> cannot be changed
+    /// after the first request, so implementations should only set it when it is null.
     /// </summary>
     protected abstract Task SetBaseAddress(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Add the required logic for authorization by implementing this method
+    /// Add the required logic for authorization by implementing this method.
+    /// Called before every attempt, including retries.
     /// </summary>
     /// <param name="request">Instance of HttpRequestMessage.
     /// Authorization token should be added to request if each request needs different authorization. otherwise can add to the HttpClient</param>
@@ -168,6 +162,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// This method will be called if any custom Logging required.
     /// </summary>
     /// <param name="response">instance of the sent request message</param>
+    /// <param name="elapsed">Time taken by the request, in milliseconds</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     protected virtual Task WriteLog(HttpResponseMessage response, long elapsed, CancellationToken cancellationToken = default)
@@ -177,113 +172,177 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
     /// <summary>
     /// Main method to sends use the delegates and configures both request and client.
+    /// When called outside <see cref="GetString"/>, <see cref="GetStream"/> or <see cref="SendAsync{T}(CancellationToken)"/>,
+    /// it clears the per-request configuration when it completes.
     /// </summary>
     /// <returns>The response after sending the request</returns>
-    protected internal virtual async Task<HttpResponseMessage> ConfigAndSend(HttpRequestMessage request, CancellationToken cancellationToken = default)
+    protected virtual async Task<HttpResponseMessage> ConfigAndSend(HttpRequestMessage request, CancellationToken cancellationToken = default)
     {
-        await SetBaseAddress(cancellationToken);
-
-        if (!_isRetrying)
-        {
-            ConfigRequestMessage?.Invoke(request);
-
-            ConfigHttpClient?.Invoke(this);
-
-
-            if (QueryParameters?.Count > 0)
-            {
-                var parsedQueries = QueryHelpers.AddQueryString(RequestUrlPath, QueryParameters);
-                request.RequestUri = new Uri(parsedQueries, UriKind.Relative);
-            }
-
-        }
-
-        await SetAuthorizationHeader(request: request, cancellationToken: cancellationToken);
-
-
-        HttpResponseMessage response = new HttpResponseMessage();
-
-        Stopwatch reqWatch = Stopwatch.StartNew();
+        bool ownsRequestState = _requestDepth == 0;
         try
         {
-            response = await this.SendAsync(request, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            if (!await ExecuteExceptionHandlersInternal(response, ex, cancellationToken))
+            await SetBaseAddress(cancellationToken).ConfigureAwait(false);
+
+            ApplyRequestConfigs(request);
+
+            byte[]? body = null;
+#if NETSTANDARD2_0
+            // .NET Framework's HttpClient disposes the request content once sent; keep a copy so retries can resend it.
+            if (request.Content is not null && _retryCount > 0)
             {
-                response.Dispose();
-                throw;
+                body = await request.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
             }
-        }
+#endif
 
-        await WriteLog(response, reqWatch.ElapsedMilliseconds, cancellationToken);
+            HttpResponseMessage response = await SendAndHandle(request, cancellationToken).ConfigureAwait(false);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            _logger.LogWarning("""
-                {StatusCode}
-                Request: {@Request}
-                Response: {@Response}
-                """, response.StatusCode, request, response);
-                
+            int retriesLeft = _retryCount;
+            while (retriesLeft > 0 && await IsRetryRequired(response, cancellationToken).ConfigureAwait(false))
+            {
+                retriesLeft--;
 
-            var contents = await response.Content.ReadAsStringAsync();
-            _logger.LogWarning("Error Response, contents: {contents}", contents);
-        }
-        else
-        {
-            _logger.LogTrace("""
-                {StatusCode}
-                Request: {@Request}
-                Response: {@Response}
-                """, response.StatusCode, request, response);
-                
-        }
+                if (body is null && request.Content is not null)
+                {
+                    body = await ReadAsByteArrayAsync(request.Content, cancellationToken).ConfigureAwait(false);
+                }
 
+                HttpRequestMessage retryRequest = CreateRetryRequest(request, body);
 
-        await ExecuteStatusCodeHandlersInternal(response, cancellationToken);
+                _logger.LogInformation("Retrying {Method} {Url} after {StatusCode}, retries remaining: {Retries}",
+                    retryRequest.Method, retryRequest.RequestUri, (int)response.StatusCode, retriesLeft);
 
-        while (await IsRetryRequired(response, cancellationToken) && _retryCount > 0)
-        {
-            // clone the request
-            var retryRequest = Extensions.HttpRequestMessageExtensions.Clone(request);
+                response.Dispose();
+                response = await SendAndHandle(retryRequest, cancellationToken).ConfigureAwait(false);
+            }
 
-            _logger.LogInformation("Retrying the Request {Url}, retries remained: {Retries}", retryRequest.RequestUri, _retryCount - 1);
-            _logger.LogDebug("""
-                Retrying the Request, retries count remained: {Retries}, previous status was: {StatusCode}
-                Request: {@Request}
-                Response: {@Response}
-                """, _retryCount - 1, response.StatusCode, request, response);
-
-            // indicate that the consequent requests would be retries.
-            _isRetrying = true;
-
-            // decrement the counter
-            _retryCount--;
-
-            // --> retry
-            _logger.LogTrace("Attempting to send retry request for cloned request {ClonedRequest}", retryRequest);
-            response = await ConfigAndSend(retryRequest, cancellationToken);
-            _logger.LogDebug("Retry Request has been sent and got {RetryStatus} with response {@RetryResponse}", response.StatusCode, response);
-            // <-- retry
+            if (!response.IsSuccessStatusCode && EnsureSuccess)
+            {
+                string message = string.Format("Response status code does not indicate success: {0} ({1})", response.StatusCode, response.ReasonPhrase);
+                response.Dispose();
+                throw new HttpRequestException(message, inner: null);
+            }
 
             return response;
         }
-
-        if (!response.IsSuccessStatusCode && EnsureSuccess)
+        finally
         {
-            throw new HttpRequestException(
-               string.Format("Response status code does not indicate success: {0} ({1})", response.StatusCode, response.ReasonPhrase)
-               , inner: null);
+            if (ownsRequestState)
+            {
+                ClearConfigs();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Applies the per-request configuration delegates and query parameters to <paramref name="request"/>.
+    /// </summary>
+    private void ApplyRequestConfigs(HttpRequestMessage request)
+    {
+        _namingStrategyBeforeRequest ??= NamingStrategy;
+
+        ConfigRequestMessage?.Invoke(request);
+
+        ConfigHttpClient?.Invoke(this);
+
+        if (QueryParameters?.Count > 0)
+        {
+            string url = QueryStringBuilder.Append(request.RequestUri?.OriginalString ?? RequestUrlPath, QueryParameters);
+            request.RequestUri = new Uri(url, UriKind.RelativeOrAbsolute);
+        }
+    }
+
+    /// <summary>
+    /// Sends a single attempt of <paramref name="request"/> and runs the exception and status code handlers.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendAndHandle(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        await SetAuthorizationHeader(request: request, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        HttpResponseMessage response;
+        Stopwatch reqWatch = Stopwatch.StartNew();
+        try
+        {
+            response = await SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!(ex is OperationCanceledException && cancellationToken.IsCancellationRequested))
+        {
+            // Handlers observe the failure; there is no response to continue with, so it is always rethrown.
+            _logger.LogWarning(ex, "{Method} {Url} failed after {Elapsed} ms", request.Method, request.RequestUri, reqWatch.ElapsedMilliseconds);
+            await ExecuteExceptionHandlersInternal(null, ex, cancellationToken).ConfigureAwait(false);
+            throw;
         }
 
-        ClearConfigs();
+        await WriteLog(response, reqWatch.ElapsedMilliseconds, cancellationToken).ConfigureAwait(false);
 
-        _isRetrying = false;
+        // Only the method, url and status are logged: request headers carry credentials and bodies may carry personal data.
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogWarning("{Method} {Url} responded {StatusCode} in {Elapsed} ms",
+                request.Method, request.RequestUri, (int)response.StatusCode, reqWatch.ElapsedMilliseconds);
+
+            if (_logger.IsEnabled(LogLevel.Debug) && response.Content is not null)
+            {
+                string contents = await ReadAsStringAsync(response.Content, cancellationToken).ConfigureAwait(false);
+                _logger.LogDebug("Error response contents: {Contents}", contents);
+            }
+        }
+        else
+        {
+            _logger.LogTrace("{Method} {Url} responded {StatusCode} in {Elapsed} ms",
+                request.Method, request.RequestUri, (int)response.StatusCode, reqWatch.ElapsedMilliseconds);
+        }
+
+        await ExecuteStatusCodeHandlersInternal(response, cancellationToken).ConfigureAwait(false);
 
         return response;
+    }
 
+    /// <summary>
+    /// Clones <paramref name="request"/> for a retry, giving it its own copy of the body.
+    /// </summary>
+    private static HttpRequestMessage CreateRetryRequest(HttpRequestMessage request, byte[]? body)
+    {
+        HttpRequestMessage retryRequest = Extensions.HttpRequestMessageExtensions.Clone(request);
+
+        if (body is not null && request.Content is not null)
+        {
+            ByteArrayContent content = new(body);
+            foreach (KeyValuePair<string, IEnumerable<string>> header in request.Content.Headers)
+            {
+                content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+            retryRequest.Content = content;
+        }
+
+        return retryRequest;
+    }
+
+    /// <summary>
+    /// Sends a GET request to <see cref="RequestUrlPath"/>, configured by the per-request delegates.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendConfiguredRequest(CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, RequestUrlPath);
+        return await ConfigAndSend(request, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs a public entry point and clears the per-request configuration once the outermost one completes.
+    /// </summary>
+    private async Task<TResult> RunRequest<TResult>(Func<Task<TResult>> send)
+    {
+        _requestDepth++;
+        try
+        {
+            return await send().ConfigureAwait(false);
+        }
+        finally
+        {
+            if (--_requestDepth == 0)
+            {
+                ClearConfigs();
+            }
+        }
     }
 
     protected virtual async Task<bool> ExecuteStatusCodeHandlersInternal(
@@ -342,8 +401,10 @@ public abstract class PdsrClientBase : IPdsrClientBase
         return true;
     }
 
-
-
+    /// <summary>
+    /// Resets the per-request configuration: delegates, handlers, url, query parameters, <see cref="EnsureSuccess"/>,
+    /// and a <see cref="NamingStrategy"/> changed by a per-request configuration.
+    /// </summary>
     protected virtual void ClearConfigs()
     {
         ConfigHttpClient = null;
@@ -353,16 +414,45 @@ public abstract class PdsrClientBase : IPdsrClientBase
         RequestUrlPath = string.Empty;
         QueryParameters.Clear();
         EnsureSuccess = false;
+
+        if (_namingStrategyBeforeRequest is { } namingStrategy)
+        {
+            NamingStrategy = namingStrategy;
+            _namingStrategyBeforeRequest = null;
+        }
     }
 
     protected virtual async ValueTask<T?> Deserialize<T>(Stream stream, CancellationToken cancellationToken = default)
     {
-        return await JsonSerializer.DeserializeAsync<T>(stream, SerializerOptions, cancellationToken);
+        return await JsonSerializer.DeserializeAsync<T>(stream, SerializerOptions, cancellationToken).ConfigureAwait(false);
     }
 
-    #region IDisposable
-    private bool disposed = false; // To detect redundant calls
+    private static Task<string> ReadAsStringAsync(HttpContent content, CancellationToken cancellationToken) =>
+#if NET5_0_OR_GREATER
+        content.ReadAsStringAsync(cancellationToken);
+#else
+        content.ReadAsStringAsync();
+#endif
 
+    private static Task<Stream> ReadAsStreamAsync(HttpContent content, CancellationToken cancellationToken) =>
+#if NET5_0_OR_GREATER
+        content.ReadAsStreamAsync(cancellationToken);
+#else
+        content.ReadAsStreamAsync();
+#endif
+
+    private static Task<byte[]> ReadAsByteArrayAsync(HttpContent content, CancellationToken cancellationToken) =>
+#if NET5_0_OR_GREATER
+        content.ReadAsByteArrayAsync(cancellationToken);
+#else
+        content.ReadAsByteArrayAsync();
+#endif
+
+    #region IDisposable
+    /// <summary>
+    /// Releases this instance. The <see cref="HttpClient"/> passed to the constructor is owned by the caller
+    /// (usually <see cref="IHttpClientFactory"/>) and is not disposed.
+    /// </summary>
     public void Dispose()
     {
         Dispose(true);
@@ -371,18 +461,6 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
     protected virtual void Dispose(bool disposing)
     {
-        if (disposed)
-        {
-            return;
-        }
-
-        if (disposing)
-        {
-            // Dispose managed resources.
-            _client?.Dispose();
-        }
-
-        disposed = true;
     }
     #endregion
 
@@ -408,7 +486,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// <param name="response">Previously sent response</param>
     /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
     /// <returns>Returns a boolean indicates if retry needs to be done or not.</returns>
-    protected internal virtual Task<bool> IsRetryRequired(HttpResponseMessage response, CancellationToken cancellationToken = default)
+    protected virtual Task<bool> IsRetryRequired(HttpResponseMessage response, CancellationToken cancellationToken = default)
     {
         return Task.FromResult(false);
     }

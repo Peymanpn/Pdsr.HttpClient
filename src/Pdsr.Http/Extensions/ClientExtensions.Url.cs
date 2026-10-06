@@ -10,21 +10,11 @@ public static partial class PdsrClientExtensions
     /// <typeparam name="TClient">IPdsrClientBase to add url to</typeparam>
     /// <param name="client">HttpClient to add url to</param>
     /// <param name="url">Url</param>
-    /// <param name="append">should append or replace</param>
+    /// <param name="append">true to append <paramref name="url"/> to the current path, false to replace it</param>
     /// <returns></returns>
     public static TClient Url<TClient>(this TClient client, string url, bool append = false)
         where TClient : IPdsrClientBase
-        => append ? client.SetUrl(url) : client.AddUrl(url);
-
-    /// <summary>
-    /// Sets or Append the url for request.RequestUrl
-    /// </summary>
-    /// <param name="client"></param>
-    /// <param name="url"></param>
-    /// <param name="append"></param>
-    /// <returns></returns>
-    public static IPdsrClientBase Url(this IPdsrClientBase client, string url, bool append = false)
-        => append ? client.SetUrl(url) : client.AddUrl(url);
+        => append ? client.AddUrl(url) : client.SetUrl(url);
 
     /// <summary>
     ///

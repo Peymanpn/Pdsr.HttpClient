@@ -6,65 +6,83 @@ A helper library to use with HTTP API Calls
 
 [![NuGet version (Pdsr.Http)](https://img.shields.io/nuget/v/Pdsr.Http.svg?style=flat-square)](https://www.nuget.org/packages/Pdsr.Http/)
 
+> **Upgrading from 3.x?** See [UPGRADING.md](UPGRADING.md) for breaking changes in 4.0.
+
 ## Getting Started
 
-you need to install the package, add to DI and then use it in services.
+1. Install the package: `dotnet add package Pdsr.Http`. The fluent extensions are included; `Pdsr.Http.Extensions` is no longer needed.
+2. Inherit the abstract class `PdsrClientBase` and implement `SetBaseAddress` and `SetAuthorizationHeader`.
+3. Register it as a typed client and configure its `HttpClient`.
 
-1. install the package `dotnet add package Pdsr.HttpClient` and for extensions `dotnet add package Pdsr.HttpClient.Extensions`.
-2. Inject an `System.Net.HttpClient` to the DI container.
-3. Implement the `IPdsrClientBase` or inherit the abstract class `PdsrClientBase` and override any methods required.
+```csharp
+public interface IOrdersClient : IPdsrClientBase { }
+
+public class OrdersClient : PdsrClientBase, IOrdersClient
+{
+    public OrdersClient(HttpClient client, ILoggerFactory loggerFactory) : base(client, loggerFactory) { }
+
+    // HttpClient.BaseAddress cannot change after the first request, so only set it when missing.
+    protected override Task SetBaseAddress(CancellationToken cancellationToken = default)
+    {
+        BaseAddress ??= new Uri("https://example.com/api/");
+        return Task.CompletedTask;
+    }
+
+    // Called before every attempt, including retries.
+    protected override Task SetAuthorizationHeader(HttpRequestMessage request, CancellationToken cancellationToken = default)
+    {
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "...");
+        return Task.CompletedTask;
+    }
+}
+
+services.AddPdsrClient<IOrdersClient, OrdersClient>(new PdsrClientConfigs { ClientName = "orders" })
+    .ConfigureHttpClient(c => c.Timeout = TimeSpan.FromSeconds(30));
+```
+
+Then build and send requests fluently:
 
 ```csharp
 public class SomeService
 {
-    private readonly IPdsrClient _client;
-    public SomeService(IPdsrClient client) => _client = client;
+    private readonly IOrdersClient _client;
+    public SomeService(IOrdersClient client) => _client = client;
 
-    public async Task SomeAsyncMethod(string someRouteId, string someQueryStringValue, CancellationToken cancellationToken = default)
+    public Task<Order?> CreateOrder(string customerId, NewOrder order, CancellationToken cancellationToken = default)
     {
-        var results = await _client.Url("https://example.com/api").AddUrl(someRouteId)
-            .AddQueryString ("key" , someQueryStringValue)
-            .Accept("application/vnd.api.custom+custom")
-            .OnBadRequest( (res)=>
+        return _client.Url("customers").AddUrl(customerId).AddUrl("orders")
+            .AddQueryString("notify", "true")
+            .Accept("application/json")
+            .OnBadRequest<IOrdersClient, ProblemDetails>((problem, response, ct) =>
             {
-                // do something
+                // handle the validation errors
+                return Task.CompletedTask;
             })
-            .OnException( (ex) =>
+            .OnNotFound((response, ct) =>
             {
-                // do something about the exception
+                // do something when the customer is not found
+                return Task.CompletedTask;
             })
-            .OnNoFound( (res) =>
+            .OnException((response, exception) =>
             {
-                // do something when resource not found.
+                // observe the failure; it is rethrown afterwards
             })
-            // and any other status code and so on
-            // or add handler to the Client to run on certain situations
-            // or add handler to the HttpRequestMessage on certain situations
-            .Post(new { Something = "some value" })
+            .Post(order, SerializationNamingStrategy.Snake)
             .SnakeCase()
-            .SendAsync<SomeModelSupposeToDeserializeTo>(cancellationToken);
-        return results;
+            .SendAsync<Order>(cancellationToken);
     }
 }
 ```
 
-you need to override the abstract method `GetAuthorizationHeader` if your API needs authentication and implement the authorization logic there.
+Everything configured on the client (url, query strings, handlers, `EnsureSuccess`, `.SnakeCase()`) applies to the next request only, and is reset when it completes, whether it succeeds or fails.
 
-```csharp
-protected abstract Task SetAuthorizationHeader(HttpRequestMessage request, CancellationToken cancellationToken = default);
-```
+- `SendAsync<T>` returns `default` for a non-success response or an empty body. Call `.EnsureSuccess()` to throw `HttpRequestException` on a non-success status instead.
+- `GetString` and `GetStream` return the raw response contents.
+- Override `WriteLog` to log every response in one place, and `IsRetryRequired` to retry responses (up to `_retryCount` times per request).
 
-You can also log all requests and responses in the inherited class, to have one code log all requests.
+### Serialization naming
 
-```csharp
-protected abstract Task WriteLog(HttpResponseMessage response, long ellapsed, CancellationToken cancellationToken = default);
-```
-
-Use the required Serializer/Deserializer Name casing.
-
-Right now, it only supports `CamelCase` by default and `SnakeCase` can be used as well.
-
-In case of deserialization, if your API does not return any model or you want to get anything else other than Model, such as Stream, String, or the HttpResponseMessage itself, you can use the respected method such as `GetStream` or `GetString` and override the `SendAsync` to return the Message itself.
+Responses are deserialized with camelCase names (case-insensitive) by default. Use `.SnakeCase()` for a single request, or set `NamingStrategy` in your client's constructor to change the default. Request bodies sent with `Post`, `Put` and `Patch` use the naming strategy passed to them (camelCase by default).
 
 ## Contribute
 

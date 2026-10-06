@@ -76,6 +76,7 @@ public static partial class PdsrClientExtensions
     /// <param name="client"></param>
     /// <param name="data"></param>
     /// <param name="namingStrategy"></param>
+    /// <param name="mediaType"></param>
     /// <returns></returns>
     public static TClient Patch<TClient>(this TClient client, object data, SerializationNamingStrategy namingStrategy = SerializationNamingStrategy.Camel, string mediaType = _jsonMediaType)
         where TClient : IPdsrClientBase
@@ -125,13 +126,7 @@ public static partial class PdsrClientExtensions
     /// <param name="request"></param>
     private static void SerializeAndGetContent(object data, SerializationNamingStrategy namingStrategy, string mediaType, HttpRequestMessage request)
     {
-        JsonSerializerOptions? serializationSettings = namingStrategy switch
-        {
-            SerializationNamingStrategy.None => PdsrClientDefaults.DefaultSerializer,
-            SerializationNamingStrategy.Camel => PdsrClientDefaults.CamelCaseSerializer,
-            SerializationNamingStrategy.Snake => PdsrClientDefaults.SnakeSerializer,
-            _ => PdsrClientDefaults.DefaultSerializer,
-        };
+        JsonSerializerOptions serializationSettings = PdsrClientDefaults.GetSerializerOptions(namingStrategy);
 
         string contents = JsonSerializer.Serialize(data, serializationSettings);
         request.Content = new StringContent(contents, Encoding.UTF8, mediaType);

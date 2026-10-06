@@ -2,39 +2,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Pdsr.Http;
 
-#region Delegates
-
-/// <summary>
-/// Asynchronous delegate that takes <see cref="HttpResponseMessage"/>,
-/// <see cref="HttpRequestMessage"/>,
-/// <see cref="HttpStatusCode"/>,
-/// and <see cref="CancellationToken"/> and returns a Task for the job to run.
-/// </summary>
-/// <param name="response">Response from an already send request</param>
-/// <param name="request">Request from <see cref="HttpResponseMessage.RequestMessage"/></param>
-/// <param name="statusCode">The status code of the underlying response</param>
-/// <param name="cancellationToken"></param>
-/// <returns></returns>
-//public delegate Task GeneralStatusHandlerAsync(HttpResponseMessage response, HttpRequestMessage? request, HttpStatusCode statusCode, CancellationToken cancellationToken = default);
-
-/// <summary>
-/// Asynchronous delegate that takes <see cref="HttpResponseMessage"/>,
-/// <see cref="HttpRequestMessage"/>,
-/// <see cref="HttpStatusCode"/> and returns a task for the job to run.
-/// </summary>
-/// <param name="response"></param>
-/// <param name="request"></param>
-/// <param name="statusCode"></param>
-//public delegate void GeneralStatusHandler(HttpResponseMessage response, HttpRequestMessage? request, HttpStatusCode statusCode);
-
-//public delegate Task ErrorRequestHandlerAsync(object? error, HttpResponseMessage response, CancellationToken cancellationToken = default);
-//public delegate void ErrorRequestHandler(object? error, HttpResponseMessage response);
-
-//public delegate void ExceptionHandler(HttpResponseMessage? response, Exception exception);
-//public delegate Task ExceptionHandlerAsync(HttpResponseMessage? response, Exception exception, CancellationToken cancellationToken = default);
-
-#endregion
-
 /// <summary>
 /// Custom HttpClient
 /// </summary>
@@ -64,13 +31,13 @@ public interface IPdsrClientBase : IDisposable
 
     /// <summary>
     /// Holds the invocation list for status codes.
-    /// should not be used directly. preferred to use through Extension methods in PdsrClientExtensions if
-    /// the package Pdsr.HttpClient.Extensions is used.
+    /// should not be used directly. preferred to use through Extension methods in PdsrClientExtensions.
     /// </summary>
     Func<HttpResponseMessage, CancellationToken, Task>? HandleStatusCodeBase { get; set; }
 
     /// <summary>
-    /// Holds the invocation list for exceptions.
+    /// Holds the invocation list for exceptions thrown while sending a request.
+    /// Handlers observe the exception; it is rethrown after they run.
     /// </summary>
     Func<HttpResponseMessage?, Exception, CancellationToken, Task>? HandleExceptionAsync { get; set; }
 
@@ -80,7 +47,10 @@ public interface IPdsrClientBase : IDisposable
     /// </summary>
     bool EnsureSuccess { get; set; }
 
-    public SerializationNamingStrategy NamingStrategy { get; set; }
+    /// <summary>
+    /// Naming strategy used to deserialize responses.
+    /// </summary>
+    SerializationNamingStrategy NamingStrategy { get; set; }
 
     #endregion
 
