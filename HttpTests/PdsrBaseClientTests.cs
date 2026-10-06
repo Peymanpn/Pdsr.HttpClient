@@ -1,7 +1,7 @@
 using Pdsr.Http;
 using RichardSzalay.MockHttp;
 using System.Net;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using System;
 using Pdsr.Http.Extensions;
