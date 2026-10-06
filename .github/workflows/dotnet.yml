@@ -1,21 +1,27 @@
 name: .NET
 
+# Pull requests and pushes to main build, test and pack.
+# Pushing a tag like v4.0.0 or v4.0.0-beta.1 also publishes to NuGet and creates a GitHub Release;
+# the tag must match <Version> in src/Directory.Build.props.
 on:
   push:
     branches:
-    - main
+      - main
+    tags:
+      - 'v*'
   pull_request:
     branches:
-    - main
-    - '*'
-
+      - main
 env:
   CI: 'true'
   DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 'true'
 jobs:
   build:
+
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
     - uses: actions/checkout@v4
       with:
@@ -23,25 +29,65 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.0.x
+        dotnet-version: 10.0.x
+    - name: Check tag matches version
+      if: startsWith(github.ref, 'refs/tags/v')
+      run: |
+        version=$(dotnet msbuild src/Pdsr.Http/Pdsr.Http.csproj -getProperty:Version)
+        tag="${GITHUB_REF_NAME#v}"
+        if [ "$tag" != "$version" ]; then
+          echo "::error::Tag $GITHUB_REF_NAME does not match <Version>$version</Version> in src/Directory.Build.props"
+          exit 1
+        fi
+        echo "Releasing $version"
     - name: Restore dependencies
-      run: dotnet restore --verbosity normal
+      run: dotnet restore
     - name: signing key
       run: echo ${{ secrets.SNKEY }} | base64 -d > key.snk
     - name: Build
-      run: dotnet build --configuration Release --no-restore -v n
+      run: dotnet build --configuration Release -p:SignAssembly=True --no-restore
+    - name: Test
+      run: dotnet test Pdsr.Http.sln --configuration Release --no-build
+
     - name: Make packages
-      run: |
-        dotnet pack --verbosity normal --no-build --no-restore --configuration Release --output ./artifacts/ src/Pdsr.Http
-        dotnet pack --verbosity normal --no-build --no-restore --configuration Release --output ./artifacts/ src/Pdsr.Http.Extensions
+      run: dotnet pack --no-build --no-restore --configuration Release --output ./artifacts/ src/Pdsr.Http
+
     - name: Upload package artifacts
       uses: actions/upload-artifact@v4
-      if: github.ref == 'refs/heads/main'
       with:
         name: nuget-packages
-        path: |
-          **/*.nupkg
-          **/*.snupkg
+        path: artifacts/*.nupkg
+        if-no-files-found: error
+
+  release:
+    # Runs only for version tags, after build and tests pass, and reuses the tested packages.
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
+      id-token: write # NuGet trusted publishing (OIDC)
+    steps:
+    - name: Download packages
+      uses: actions/download-artifact@v4
+      with:
+        name: nuget-packages
+        path: artifacts
+
+    - name: NuGet login (trusted publishing)
+      uses: NuGet/login@v1
+      id: nuget-login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+
     - name: Publish packages
-      if: github.ref == 'refs/heads/main'
-      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate --api-key ${{ secrets.NUGET_API_KEY }}
+      run: dotnet nuget push artifacts/*.nupkg --source https://api.nuget.org/v3/index.json --skip-duplicate --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        prerelease=""
+        case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+        gh release create "$GITHUB_REF_NAME" artifacts/*.nupkg \
+          --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag $prerelease
