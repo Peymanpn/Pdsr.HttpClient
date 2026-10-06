@@ -12,29 +12,39 @@ public static class PdsrClientDefaults
     /// </summary>
     public const string DefaultClientName = "httpClient";
 
-    /// <summary>
-    /// Default Serializer options
-    /// </summary>
-    public static JsonSerializerOptions DefaultSerializer
+    // System.Text.Json caches type metadata per options instance, so these must be created once and reused.
+    private static readonly JsonSerializerOptions _defaultSerializer = new();
+
+    private static readonly JsonSerializerOptions _camelCaseSerializer = new(JsonSerializerDefaults.Web);
+
+    private static readonly JsonSerializerOptions _snakeSerializer = new()
     {
-        get
-        {
-            return new JsonSerializerOptions();
-        }
-    }
-    /// <summary>
-    /// CamelCase JsonSerializer
-    /// </summary>
-    public static JsonSerializerOptions CamelCaseSerializer => new JsonSerializerOptions
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = SnakeCaseNamingPolicy.SnakeCase,
+        PropertyNameCaseInsensitive = true
     };
 
     /// <summary>
-    /// SnakeCase JsonSerializer
+    /// Default Serializer options. Property names are used as-is and matched case-sensitively.
     /// </summary>
-    public static JsonSerializerOptions SnakeSerializer => new JsonSerializerOptions
+    public static JsonSerializerOptions DefaultSerializer => _defaultSerializer;
+
+    /// <summary>
+    /// CamelCase JsonSerializer (<see cref="JsonSerializerDefaults.Web"/>): camelCase names, case-insensitive reads.
+    /// </summary>
+    public static JsonSerializerOptions CamelCaseSerializer => _camelCaseSerializer;
+
+    /// <summary>
+    /// SnakeCase JsonSerializer: snake_case names, case-insensitive reads.
+    /// </summary>
+    public static JsonSerializerOptions SnakeSerializer => _snakeSerializer;
+
+    /// <summary>
+    /// Returns the shared serializer options for <paramref name="namingStrategy"/>.
+    /// </summary>
+    public static JsonSerializerOptions GetSerializerOptions(SerializationNamingStrategy namingStrategy) => namingStrategy switch
     {
-        PropertyNamingPolicy = SnakeCaseNamingPolicy.SnakeCase
+        SerializationNamingStrategy.Camel => CamelCaseSerializer,
+        SerializationNamingStrategy.Snake => SnakeSerializer,
+        _ => DefaultSerializer,
     };
 }

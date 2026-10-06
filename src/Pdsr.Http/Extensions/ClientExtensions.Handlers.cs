@@ -31,25 +31,8 @@ public static partial class PdsrClientExtensions
         return client.OnAnyResponse((res, c) => { handler(res); return Task.CompletedTask; });
     }
 
-    ///// <summary>
-    ///// The <see cref="GeneralStatusHandler"/> invocation happens in any circumstance
-    ///// </summary>
-    ///// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
-    ///// <param name="client">The underlying httpClient</param>
-    ///// <param name="handler">The Func to invoke</param>
-    ///// <returns>Returns the same past client with the Func injected as delegate method</returns>
-    //public static TClient OnAnyResponse<TClient>(this TClient client, GeneralStatusHandler handler)
-    //    where TClient : IPdsrClientBase
-    //{
-    //    return client.OnAnyResponse((res, c) =>
-    //    {
-    //        handler(res, res.RequestMessage, res.StatusCode);
-    //        return Task.CompletedTask;
-    //    });
-    //}
-
     /// <summary>
-    /// The <see cref="GeneralStatusHandlerAsync"/> invocation happens in any circumstance
+    /// The handler, receiving the response, its request and status code, runs in any circumstance
     /// </summary>
     /// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
     /// <param name="client">The underlying httpClient</param>
@@ -73,25 +56,32 @@ public static partial class PdsrClientExtensions
     /// </summary>
     /// <typeparam name="TError">Type of the model to deserialize</typeparam>
     /// <param name="response">an instance HttpResponseMessage containing server response message</param>
+    /// <param name="namingStrategy">Naming strategy of the error model</param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    internal static async ValueTask<TError?> GetBadRequestModel<TError>(HttpResponseMessage response, CancellationToken cancellationToken = default)
+    internal static async ValueTask<TError?> GetBadRequestModel<TError>(HttpResponseMessage response, SerializationNamingStrategy namingStrategy, CancellationToken cancellationToken = default)
     {
-        var stream = await response.Content.ReadAsStreamAsync(
+        // Read from the buffered string rather than the content stream, which is cached and would be left at its end.
+        string contents = await response.Content.ReadAsStringAsync(
 #if NET5_0_OR_GREATER
                 cancellationToken
 #endif
-            );
-        var errorDto = await JsonSerializer.DeserializeAsync<TError>(stream, cancellationToken: cancellationToken);
-        return errorDto;
+            ).ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(contents))
+        {
+            return default;
+        }
+
+        return JsonSerializer.Deserialize<TError>(contents, PdsrClientDefaults.GetSerializerOptions(namingStrategy));
     }
 
-    public static TClient OnBadRequest<TClient, TError>(this TClient client, Func<object?, HttpResponseMessage, CancellationToken, Task> badRequestHandler)
+    public static TClient OnBadRequest<TClient, TError>(this TClient client, Func<TError?, HttpResponseMessage, CancellationToken, Task> badRequestHandler)
         where TClient : IPdsrClientBase
     {
         return client.OnStatusCode(HttpStatusCode.BadRequest, async (res, c) =>
         {
-            var errorDto = await GetBadRequestModel<TError>(res, c);
+            var errorDto = await GetBadRequestModel<TError>(res, client.NamingStrategy, c);
             await badRequestHandler(errorDto, res, c);
         });
     }
@@ -101,7 +91,7 @@ public static partial class PdsrClientExtensions
     {
         client.OnStatusCode(HttpStatusCode.BadRequest, async (res, c) =>
         {
-            var errorDto = await GetBadRequestModel<object>(res, c);
+            var errorDto = await GetBadRequestModel<object>(res, client.NamingStrategy, c);
             await badRequestHandler(errorDto, res, c);
         });
         return client;
@@ -112,7 +102,7 @@ public static partial class PdsrClientExtensions
     {
         client.OnStatusCode(HttpStatusCode.BadRequest, async (r, c) =>
         {
-            var errorDto = await GetBadRequestModel<object>(r, c);
+            var errorDto = await GetBadRequestModel<object>(r, client.NamingStrategy, c);
             badRequestHandler(errorDto, r);
         });
         return client;

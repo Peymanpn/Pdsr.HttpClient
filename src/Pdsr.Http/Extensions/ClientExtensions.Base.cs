@@ -103,9 +103,9 @@ public static partial class PdsrClientExtensions
             throw new ArgumentException($"'{nameof(key)}' cannot be null or empty.", nameof(key));
         }
 
-        if (string.IsNullOrEmpty(value))
+        if (value is null)
         {
-            throw new ArgumentException($"'{nameof(value)}' cannot be null or empty.", nameof(value));
+            throw new ArgumentNullException(nameof(value));
         }
 
         client.QueryParameters ??= new Dictionary<string, string?>();
@@ -169,7 +169,7 @@ public static partial class PdsrClientExtensions
     }
 
     /// <summary>
-    /// Adds a delegate to the <see cref="TClient"/> invocation list.
+    /// Adds a delegate to the <typeparamref name="TClient"/> invocation list.
     /// It runs right before sending the request.
     /// </summary>
     /// <typeparam name="TClient"></typeparam>
@@ -184,7 +184,7 @@ public static partial class PdsrClientExtensions
     }
 
     /// <summary>
-    /// Replaces the provided AcceptType as header to the RequestMessage
+    /// Adds the provided AcceptType as header to the RequestMessage
     /// </summary>
     /// <typeparam name="TClient"></typeparam>
     /// <param name="client"></param>

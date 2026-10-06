@@ -1,5 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using System.Runtime.InteropServices;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Pdsr.Http;
 
@@ -26,7 +26,8 @@ public static class ServiceCollectionExtensions
 
 
     /// <summary>
-    /// Register an instance of HttpClient with custom <typeparamref name="TConfig"/> as config type
+    /// Register a named HttpClient using <paramref name="clientConfigs"/>,
+    /// and registers <paramref name="clientConfigs"/> as <typeparamref name="TConfig"/> for <see cref="PdsrNamedClientBase{TConfig}"/>.
     /// </summary>
     /// <param name="services">Service collection</param>
     /// <param name="clientConfigs">HttpClient configurations</param>
@@ -34,18 +35,32 @@ public static class ServiceCollectionExtensions
     public static IHttpClientBuilder AddPdsrClient<TConfig>(this IServiceCollection services, TConfig clientConfigs)
         where TConfig : IPdsrClientConfigs
     {
+        services.TryAdd(ServiceDescriptor.Singleton(typeof(TConfig), clientConfigs));
+
         var builder = services.AddHttpClient(clientConfigs.ClientName);
 
         return builder;
     }
 
+    /// <summary>
+    /// Registers <typeparamref name="TClient"/> as a typed client of <typeparamref name="TClientInterface"/>,
+    /// receiving the named HttpClient configured by the returned builder.
+    /// </summary>
+    /// <param name="services">Service collection</param>
+    /// <param name="clientConfigs">HttpClient configurations. When null, the client is named after <typeparamref name="TClient"/>.
+    /// A client name can only be bound to one typed client.</param>
+    /// <returns>an Instance of <see cref="IHttpClientBuilder"/> to configure the client's <see cref="HttpClient"/></returns>
     public static IHttpClientBuilder AddPdsrClient<TClientInterface, TClient>(this IServiceCollection services, IPdsrClientConfigs? clientConfigs = null)
         where TClientInterface : class
         where TClient : class, TClientInterface
     {
-        clientConfigs ??= new PdsrClientConfigs();
+        if (clientConfigs is null)
+        {
+            return services.AddHttpClient<TClientInterface, TClient>();
+        }
 
-        services.AddScoped<TClientInterface, TClient>();
-        return services.AddPdsrClient(clientConfigs);
+        services.TryAddSingleton(clientConfigs);
+
+        return services.AddHttpClient<TClientInterface, TClient>(clientConfigs.ClientName);
     }
 }

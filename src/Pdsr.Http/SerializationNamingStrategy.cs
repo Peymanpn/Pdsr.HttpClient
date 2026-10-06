@@ -5,6 +5,9 @@ namespace Pdsr.Http;
 /// </summary>
 public enum SerializationNamingStrategy
 {
+    /// <summary>
+    /// Property names are used as-is and matched case-sensitively.
+    /// </summary>
     None,
     /// <summary>
     /// Camel Case

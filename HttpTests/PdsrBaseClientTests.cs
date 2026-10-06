@@ -85,16 +85,35 @@ public class TestablePdsrClient : PdsrClientBase
     public TestablePdsrClient(HttpClient client, ILoggerFactory loggerFactory)
         : base(client, loggerFactory) { }
 
+    /// <summary>Exposes <see cref="PdsrClientBase.ConfigAndSend"/> to tests.</summary>
+    public Task<HttpResponseMessage> Send(HttpRequestMessage request, CancellationToken cancellationToken = default)
+        => ConfigAndSend(request, cancellationToken);
+
+    /// <summary>Decides whether a response is retried; never by default.</summary>
+    public Func<HttpResponseMessage, bool> RetryWhen { get; set; } = _ => false;
+
+    public int MaxRetries { get => _retryCount; set => _retryCount = value; }
+
+    /// <summary>Value of the Authorization header set on each attempt, if any.</summary>
+    public string? BearerToken { get; set; }
+
     protected override Task SetBaseAddress(CancellationToken cancellationToken)
     {
-        BaseAddress = new Uri("http://example.com");
+        BaseAddress ??= new Uri("http://example.com");
         return Task.CompletedTask;
     }
 
     protected override Task SetAuthorizationHeader(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (BearerToken is not null)
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", BearerToken);
+        }
         return Task.CompletedTask;
     }
+
+    protected override Task<bool> IsRetryRequired(HttpResponseMessage response, CancellationToken cancellationToken = default)
+        => Task.FromResult(RetryWhen(response));
 }
 
 public class PdsrClientBaseTests
@@ -147,12 +166,14 @@ public class PdsrClientBaseTests
         _client.RequestUrlPath = "/test";
 
         // Act
-        var response = await _client.ConfigAndSend(request);
+        var response = await _client.Send(request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        _logger.ContainsMessage("Error Response, contents: Invalid input", LogLevel.Warning).Should().BeTrue();
-        _logger.GetLogs(LogLevel.Warning).Should().HaveCount(2);
+        _logger.ContainsMessage("responded 400", LogLevel.Warning).Should().BeTrue();
+        _logger.GetLogs(LogLevel.Warning).Should().HaveCount(1);
+        // Bodies may hold personal data, so they are only logged at Debug.
+        _logger.ContainsMessage("Error response contents: Invalid input", LogLevel.Debug).Should().BeTrue();
     }
 
 
@@ -168,7 +189,7 @@ public class PdsrClientBaseTests
 
         // Act
         var request = new HttpRequestMessage(HttpMethod.Get, "/test");
-        var response = await _client.ConfigAndSend(request);
+        var response = await _client.Send(request);
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -192,7 +213,7 @@ public class PdsrClientBaseTests
 
         // Act
         var request = new HttpRequestMessage(HttpMethod.Get, "/test");
-        var exception = await Record.ExceptionAsync(() => _client.ConfigAndSend(request));
+        var exception = await Record.ExceptionAsync(() => _client.Send(request));
 
         // Assert
         exception.Should().BeOfType<HttpRequestException>();
@@ -215,7 +236,7 @@ public class PdsrClientBaseTests
 
         // Act
         var request = new HttpRequestMessage(HttpMethod.Get, "/test");
-        var exception = await Record.ExceptionAsync(() => _client.ConfigAndSend(request));
+        var exception = await Record.ExceptionAsync(() => _client.Send(request));
 
         // Assert
         exception.Should().BeOfType<HttpRequestException>();
@@ -234,7 +255,7 @@ public class PdsrClientBaseTests
 
         // Act
         var request = new HttpRequestMessage(HttpMethod.Get, "/test");
-        var exception = await Record.ExceptionAsync(() => _client.ConfigAndSend(request));
+        var exception = await Record.ExceptionAsync(() => _client.Send(request));
 
         // Assert
         exception.Should().BeOfType<HttpRequestException>();
@@ -256,7 +277,7 @@ public class PdsrClientBaseTests
         // Act
         var request = new HttpRequestMessage(HttpMethod.Get, "/test");
         cts.Cancel(); // Cancel immediately
-        var exception = await Record.ExceptionAsync(() => _client.ConfigAndSend(request, cts.Token));
+        var exception = await Record.ExceptionAsync(() => _client.Send(request, cts.Token));
 
         // Assert
         exception.Should().BeOfType<TaskCanceledException>();
