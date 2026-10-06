@@ -2,8 +2,8 @@
     <PropertyGroup>
         <TargetFrameworks>netstandard2.0;netstandard2.1;net8.0;net9.0</TargetFrameworks>
         <Nullable>enable</Nullable>
-        <Version>3.8.1-preview.3</Version>
-        <LangVersion>13.0</LangVersion>
+        <Version>3.9.0-preview.1</Version>
+        <LangVersion>latest</LangVersion>
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <Description>Pdsr HttpClient helper library</Description>

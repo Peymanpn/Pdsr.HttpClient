@@ -15,7 +15,7 @@ namespace Pdsr.Http;
 /// <param name="statusCode">The status code of the underlying response</param>
 /// <param name="cancellationToken"></param>
 /// <returns></returns>
-public delegate Task AsyncGeneralStatusHandler(HttpResponseMessage response, HttpRequestMessage? request, HttpStatusCode statusCode, CancellationToken cancellationToken = default);
+//public delegate Task GeneralStatusHandlerAsync(HttpResponseMessage response, HttpRequestMessage? request, HttpStatusCode statusCode, CancellationToken cancellationToken = default);
 
 /// <summary>
 /// Asynchronous delegate that takes <see cref="HttpResponseMessage"/>,
@@ -25,14 +25,13 @@ public delegate Task AsyncGeneralStatusHandler(HttpResponseMessage response, Htt
 /// <param name="response"></param>
 /// <param name="request"></param>
 /// <param name="statusCode"></param>
-public delegate void GeneralStatusHandler(HttpResponseMessage response, HttpRequestMessage? request, HttpStatusCode statusCode);
+//public delegate void GeneralStatusHandler(HttpResponseMessage response, HttpRequestMessage? request, HttpStatusCode statusCode);
 
+//public delegate Task ErrorRequestHandlerAsync(object? error, HttpResponseMessage response, CancellationToken cancellationToken = default);
+//public delegate void ErrorRequestHandler(object? error, HttpResponseMessage response);
 
-public delegate Task ErrorRequestHandlerAsync(object? error, HttpResponseMessage response, CancellationToken cancellationToken = default);
-public delegate void ErrorequestHandler(object? error, HttpResponseMessage response);
-
-public delegate void ExceptionHandler(HttpResponseMessage? response, Exception exception);
-public delegate Task ExceptionHandlerAsync(HttpResponseMessage? response, Exception exception, CancellationToken cancellationToken = default);
+//public delegate void ExceptionHandler(HttpResponseMessage? response, Exception exception);
+//public delegate Task ExceptionHandlerAsync(HttpResponseMessage? response, Exception exception, CancellationToken cancellationToken = default);
 
 #endregion
 
@@ -65,7 +64,7 @@ public interface IPdsrClientBase : IDisposable
 
     /// <summary>
     /// Holds the invocation list for status codes.
-    /// should not be used directly. prefered to use through Extension methods in PdsrClientExtensions if
+    /// should not be used directly. preferred to use through Extension methods in PdsrClientExtensions if
     /// the package Pdsr.HttpClient.Extensions is used.
     /// </summary>
     Func<HttpResponseMessage, CancellationToken, Task>? HandleStatusCodeBase { get; set; }
@@ -101,28 +100,9 @@ public interface IPdsrClientBase : IDisposable
     Task<Stream> GetStream(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Configure the client and Get Response Contents as string
-    /// </summary>
-    /// <param name="cancellationToken"></param>
-    /// <param name="requestUrl">request url to override <see cref="RequestUrlPath"/></param>
-    /// <param name="dontAuthenticate">indicate to not use any Authorization Headers in the process</param>
-    /// <returns></returns>
-    Task<string?> GetString(CancellationToken cancellationToken = default, string? requestUrl = null, bool dontAuthenticate = false);
-
-    /// <summary>
-    /// Entry point Configure and send the request and then, Deserializes as T type. it will throw an exception if it can't deserialize
-    /// </summary>
-    /// <typeparam name="T"></typeparam>
-    /// <param name="cancellationToken"></param>
-    /// <param name="requestUrl"></param>
-    /// <param name="dontAuthenticate"></param>
-    /// <returns></returns>
-    Task<T?> SendAsync<T>(CancellationToken cancellationToken = default, string? requestUrl = null, bool dontAuthenticate = false);
-
-    /// <summary>
     /// Entry point to Configure and send the request and then, Deserializes as T type. it will throw an exception if it can't deserialize
     /// </summary>
-    /// <typeparam name="T">type to deserialize response contentes</typeparam>
+    /// <typeparam name="T">type to deserialize response contents</typeparam>
     /// <param name="cancellationToken"></param>
     /// <returns>Returns a Task representing the T Type</returns>
     Task<T?> SendAsync<T>(CancellationToken cancellationToken = default);

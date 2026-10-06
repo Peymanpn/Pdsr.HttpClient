@@ -24,38 +24,38 @@ public static partial class PdsrClientExtensions
     /// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
     /// <param name="client">The underlying httpClient</param>
     /// <param name="handler">The Action to invoke</param>
-    /// <returns>Retruns the same past client with the Func injected as delegate method</returns>
+    /// <returns>Returns the same past client with the Func injected as delegate method</returns>
     public static TClient OnAnyResponse<TClient>(this TClient client, Action<HttpResponseMessage> handler)
         where TClient : IPdsrClientBase
     {
         return client.OnAnyResponse((res, c) => { handler(res); return Task.CompletedTask; });
     }
 
-    /// <summary>
-    /// The <see cref="GeneralStatusHandler"/> invokation happens in any circumstance
-    /// </summary>
-    /// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
-    /// <param name="client">The underlying httpClient</param>
-    /// <param name="handler">The Func to invoke</param>
-    /// <returns>Retruns the same past client with the Func injected as delegate method</returns>
-    public static TClient OnAnyResponse<TClient>(this TClient client, GeneralStatusHandler handler)
-        where TClient : IPdsrClientBase
-    {
-        return client.OnAnyResponse((res, c) =>
-        {
-            handler(res, res.RequestMessage, res.StatusCode);
-            return Task.CompletedTask;
-        });
-    }
+    ///// <summary>
+    ///// The <see cref="GeneralStatusHandler"/> invocation happens in any circumstance
+    ///// </summary>
+    ///// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
+    ///// <param name="client">The underlying httpClient</param>
+    ///// <param name="handler">The Func to invoke</param>
+    ///// <returns>Returns the same past client with the Func injected as delegate method</returns>
+    //public static TClient OnAnyResponse<TClient>(this TClient client, GeneralStatusHandler handler)
+    //    where TClient : IPdsrClientBase
+    //{
+    //    return client.OnAnyResponse((res, c) =>
+    //    {
+    //        handler(res, res.RequestMessage, res.StatusCode);
+    //        return Task.CompletedTask;
+    //    });
+    //}
 
     /// <summary>
-    /// The <see cref="AsyncGeneralStatusHandler"/> invokation happens in any circumstance
+    /// The <see cref="GeneralStatusHandlerAsync"/> invocation happens in any circumstance
     /// </summary>
     /// <typeparam name="TClient">Type of the client inherits from <see cref="IPdsrClientBase"/></typeparam>
     /// <param name="client">The underlying httpClient</param>
     /// <param name="handler">The Func to invoke</param>
-    /// <returns>Retruns the same past client with the Func injected as delegate method</returns>
-    public static TClient OnAnyResponse<TClient>(this TClient client, AsyncGeneralStatusHandler handler)
+    /// <returns>Returns the same past client with the Func injected as delegate method</returns>
+    public static TClient OnAnyResponse<TClient>(this TClient client, Func<HttpResponseMessage, HttpRequestMessage?, HttpStatusCode, CancellationToken, Task> handler)
         where TClient : IPdsrClientBase
     {
         return client.OnAnyResponse((res, c) =>
@@ -86,7 +86,7 @@ public static partial class PdsrClientExtensions
         return errorDto;
     }
 
-    public static TClient OnBadRequest<TClient, TError>(this TClient client, ErrorRequestHandlerAsync badRequestHandler)
+    public static TClient OnBadRequest<TClient, TError>(this TClient client, Func<object?, HttpResponseMessage, CancellationToken, Task> badRequestHandler)
         where TClient : IPdsrClientBase
     {
         return client.OnStatusCode(HttpStatusCode.BadRequest, async (res, c) =>
@@ -96,7 +96,7 @@ public static partial class PdsrClientExtensions
         });
     }
 
-    public static TClient OnBadRequest<TClient>(this TClient client, ErrorRequestHandlerAsync badRequestHandler)
+    public static TClient OnBadRequest<TClient>(this TClient client, Func<object?, HttpResponseMessage, CancellationToken, Task> badRequestHandler)
         where TClient : IPdsrClientBase
     {
         client.OnStatusCode(HttpStatusCode.BadRequest, async (res, c) =>
@@ -107,7 +107,7 @@ public static partial class PdsrClientExtensions
         return client;
     }
 
-    public static TClient OnBadRequest<TClient>(this TClient client, ErrorequestHandler badRequestHandler)
+    public static TClient OnBadRequest<TClient>(this TClient client, Action<object?, HttpResponseMessage> badRequestHandler)
         where TClient : IPdsrClientBase
     {
         client.OnStatusCode(HttpStatusCode.BadRequest, async (r, c) =>
@@ -127,10 +127,10 @@ public static partial class PdsrClientExtensions
     #endregion
 
     #region Exception
-    public static TClient OnException<TClient>(this TClient client, ExceptionHandler exceptionHandler)
+    public static TClient OnException<TClient>(this TClient client, Action<HttpResponseMessage?, Exception> exceptionHandler)
         where TClient : IPdsrClientBase
     {
-        Func<HttpResponseMessage, Exception, CancellationToken, Task> handler = (r, ex, c) =>
+        Func<HttpResponseMessage?, Exception, CancellationToken, Task> handler = (r, ex, _) =>
         {
             exceptionHandler(r, ex);
             return Task.CompletedTask;
@@ -140,12 +140,12 @@ public static partial class PdsrClientExtensions
     }
 
 
-    public static TClient OnException<TClient>(this TClient client, ExceptionHandlerAsync exceptionHandlerAsync)
+    public static TClient OnException<TClient>(this TClient client, Func<HttpResponseMessage?, Exception, CancellationToken, Task> exceptionHandlerAsync)
         where TClient : IPdsrClientBase
     {
-        Func<HttpResponseMessage, Exception, CancellationToken, Task> exceptionHandler = async (r, ex, c) =>
+        Func<HttpResponseMessage?, Exception, CancellationToken, Task> exceptionHandler = async (r, ex, c) =>
         {
-            await exceptionHandlerAsync(r, ex);
+            await exceptionHandlerAsync(r, ex, c);
         };
 
         client.ConfigClient(c => c.HandleExceptionAsync += exceptionHandler);
@@ -189,41 +189,10 @@ public static partial class PdsrClientExtensions
         });
     }
 
-    //public static TClient OnStatusCode<TClient>(this TClient client, GeneralStatusHandler handler)
-    //    where TClient : IPdsrClientBase
-    //{
-    //    Func<HttpResponseMessage, CancellationToken, Task> handleInternal =
-    //        (res, c) =>
-    //        {
-    //            handler(res, res.RequestMessage, res.StatusCode);
-    //            return Task.CompletedTask;
-    //        };
-    //    client.ConfigClient(c => c.HandleStatusCodeBase += handleInternal);
-    //    return client;
-    //}
-
-    //public static TClient OnStatusCode<TClient>(this TClient client, HttpStatusCode statusCode, Func<HttpResponseMessage, CancellationToken, Task> handler)
-    //    where TClient : IPdsrClientBase
-    //{
-    //    Func<HttpResponseMessage, CancellationToken, Task> statusHandle = async (r, c) =>
-    //     {
-    //         if (r is not null && r.StatusCode == statusCode)
-    //         {
-    //             await handler(r, c);
-    //         }
-    //     };
-
-    //    return client.ConfigClient(c => c.HandleStatusCodeBase += handler);
-    //}
-
-    //public static TClient OnStatusCode<TClient>(this TClient client, AsyncGeneralStatusHandler handler)
-    //    where TClient : IPdsrClientBase
-    // => client.OnAnyResponse((res, c) => handler(res, res.RequestMessage, res.StatusCode, c));
-
     public static TClient OnStatusCode<TClient>(this TClient client, Action<HttpResponseMessage, HttpStatusCode> handler)
         where TClient : IPdsrClientBase
     {
-        client.OnAnyResponse((res, c) =>
+        client.OnAnyResponse((res, _) =>
         {
             handler(res, res.StatusCode);
             return Task.CompletedTask;
@@ -234,12 +203,13 @@ public static partial class PdsrClientExtensions
     public static TClient OnStatusCode<TClient>(this TClient client, Action<HttpResponseMessage> handler, HttpStatusCode statusCode)
         where TClient : IPdsrClientBase
     {
-        client.OnAnyResponse((res, req, status) =>
+        client.OnAnyResponse((res, _) =>
         {
-            if (status == statusCode)
+            if (res.StatusCode == statusCode)
             {
                 handler(res);
             }
+            return Task.CompletedTask;
 
         });
         return client;
@@ -248,13 +218,13 @@ public static partial class PdsrClientExtensions
     public static TClient OnStatusCode<TClient>(this TClient client, HttpStatusCode statusCode, Action<HttpResponseMessage> handler)
         where TClient : IPdsrClientBase
     {
-        client.OnAnyResponse((res, req, status) =>
+        client.OnAnyResponse((res, _) =>
         {
-            if (status == statusCode)
+            if (res.StatusCode == statusCode)
             {
                 handler(res);
             }
-
+            return Task.CompletedTask;
         });
         return client;
     }
@@ -305,13 +275,13 @@ public static partial class PdsrClientExtensions
         return client.OnStatusCode(429, handleTooManyRequests);
     }
 
-    public static TClient OnAuthorizationFail<TClient>(this TClient client, GeneralStatusHandler handler)
+    public static TClient OnAuthorizationFail<TClient>(this TClient client, Action<HttpResponseMessage, HttpRequestMessage?, HttpStatusCode> handler)
         where TClient : IPdsrClientBase
     {
         return client.OnStatusCode(HttpStatusCode.Unauthorized, (res) => handler(res, res.RequestMessage, res.StatusCode));
     }
 
-    public static TClient OnAuthorizationFail<TClient>(this TClient client, AsyncGeneralStatusHandler handler)
+    public static TClient OnAuthorizationFail<TClient>(this TClient client, Func<HttpResponseMessage, HttpRequestMessage?, HttpStatusCode, CancellationToken, Task> handler)
         where TClient : IPdsrClientBase
     {
         return client.OnStatusCode(HttpStatusCode.Unauthorized, (res, c) => handler(res, res.RequestMessage, res.StatusCode, c));
@@ -337,16 +307,14 @@ public static partial class PdsrClientExtensions
         where TClient : IPdsrClientBase
     {
         client.EnsureSuccess = true;
-        client.OnAnyResponse((res, req, statusCode) =>
+        client.OnAnyResponse((res, _) =>
         {
-            int code = (int)statusCode;
-            if (code > 299 || code < 200)
+            int code = (int)res.StatusCode;
+            if (!res.IsSuccessStatusCode)
             {
-                whatToDoIfNoSuccessWithResponseMessage?.Invoke(res, statusCode);
-                throw new HttpRequestException(
-                    string.Format("Response status code does not indicate success: {0} ({1})", res.StatusCode, res.ReasonPhrase)
-                        , inner: null);
+                whatToDoIfNoSuccessWithResponseMessage.Invoke(res, res.StatusCode);
             }
+            return Task.CompletedTask;
         });
         return client;
     }
@@ -366,11 +334,13 @@ public static partial class PdsrClientExtensions
         where TClient : IPdsrClientBase
     {
         client.EnsureSuccess = true;
-        client.OnAnyResponse((res, req, statusCode) =>
+        client.OnAnyResponse((res, _) =>
         {
-            int code = (int)statusCode;
-            if (code > 299 || code < 200)
+            if (!res.IsSuccessStatusCode)
+            {
                 whatToDoIfNoSuccess?.Invoke();
+            }
+            return Task.CompletedTask;
         });
         return client;
     }

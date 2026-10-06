@@ -9,32 +9,13 @@ public static class HttpRequestMessageExtensions
     /// <returns>Cloned request with same values as original request</returns>
     public static HttpRequestMessage Clone(this HttpRequestMessage request)
     {
-        HttpRequestMessage clone = new(request.Method, request.RequestUri);
+        HttpRequestMessage clone = new(request.Method, request.RequestUri)
+        {
+            Content = request.Content,
+            Version = request.Version
+        };
 
-        clone.Content = request.Content;
-        clone.Version = request.Version;
-
-#if NETSTANDARD2_0
-        foreach (KeyValuePair<string, object> prop in request.Properties)
-        {
-            clone.Properties.Add(prop);
-        }
-#elif NETSTANDARD2_1
-        foreach (KeyValuePair<string, object> prop in request.Properties)
-        {
-            clone.Properties.Add(prop);
-        }
-#elif NETCOREAPP3_1
-        foreach (KeyValuePair<string, object> prop in request.Properties)
-        {
-            clone.Properties.Add(prop);
-        }
-#elif NET5_0
-        foreach (KeyValuePair<string, object?> prop in request.Options)
-        {
-            clone.Options.TryAdd(prop.Key, prop.Value);
-        }
-#elif NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
         foreach (KeyValuePair<string, object?> prop in request.Options)
         {
             clone.Options.TryAdd(prop.Key, prop.Value);

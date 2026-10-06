@@ -55,7 +55,7 @@ public static partial class PdsrClientExtensions
     {
         if (!string.IsNullOrEmpty(client.RequestUrlPath) && !client.RequestUrlPath.EndsWith("/")) client.RequestUrlPath += "/";
         client.RequestUrlPath += url;
-        if (makeAbsolute && client.RequestUrlPath.EndsWith("/")) client.RequestUrlPath += '/';
+        if (makeAbsolute && !client.RequestUrlPath.EndsWith("/")) client.RequestUrlPath += '/';
         return client;
     }
 

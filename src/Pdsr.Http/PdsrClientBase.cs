@@ -101,12 +101,6 @@ public abstract class PdsrClientBase : IPdsrClientBase
     #endregion
 
     /// <inheritdoc/>
-    public virtual async Task<string?> GetString(CancellationToken cancellationToken = default)
-    {
-        return await GetString(cancellationToken: cancellationToken, requestUrl: null, dontAuthenticate: true);
-    }
-
-    /// <inheritdoc/>
     public virtual async Task<Stream> GetStream(CancellationToken cancellationToken = default)
     {
 
@@ -123,17 +117,21 @@ public abstract class PdsrClientBase : IPdsrClientBase
     }
 
     /// <inheritdoc/>
-    public virtual async Task<string?> GetString(CancellationToken cancellationToken = default, string? requestUrl = null, bool dontAuthenticate = false)
+    public virtual async Task<string?> GetString(CancellationToken cancellationToken = default)
     {
         using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, RequestUrlPath);
         using var response = await ConfigAndSend(request, cancellationToken);
 
+#if NET8_0_OR_GREATER
+        string contentString = await response.Content.ReadAsStringAsync(cancellationToken);
+#else
         string contentString = await response.Content.ReadAsStringAsync();
+#endif
         return contentString;
     }
 
     /// <inheritdoc/>
-    public virtual async Task<T?> SendAsync<T>(CancellationToken cancellationToken = default, string? requestUrl = null, bool dontAuthenticate = false)
+    public virtual async Task<T?> SendAsync<T>(CancellationToken cancellationToken = default)
     {
         using Stream stream = await GetStream(cancellationToken);
         try
@@ -149,13 +147,6 @@ public abstract class PdsrClientBase : IPdsrClientBase
             }
             return default;
         }
-    }
-
-    /// <inheritdoc/>
-    public virtual async Task<T?> SendAsync<T>(CancellationToken cancellationToken = default)
-    {
-        var task = await SendAsync<T>(cancellationToken: cancellationToken, requestUrl: null, dontAuthenticate: false);
-        return task;
     }
 
     /// <summary>
@@ -188,7 +179,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// Main method to sends use the delegates and configures both request and client.
     /// </summary>
     /// <returns>The response after sending the request</returns>
-    protected virtual async Task<HttpResponseMessage> ConfigAndSend(HttpRequestMessage request, CancellationToken cancellationToken = default)
+    protected internal virtual async Task<HttpResponseMessage> ConfigAndSend(HttpRequestMessage request, CancellationToken cancellationToken = default)
     {
         await SetBaseAddress(cancellationToken);
 
@@ -230,14 +221,24 @@ public abstract class PdsrClientBase : IPdsrClientBase
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogWarning("{StatusCode}\nRequest:{@Request}\nResponse: {@Response}", response.StatusCode, request, response);
+            _logger.LogWarning("""
+                {StatusCode}
+                Request: {@Request}
+                Response: {@Response}
+                """, response.StatusCode, request, response);
+                
 
             var contents = await response.Content.ReadAsStringAsync();
             _logger.LogWarning("Error Response, contents: {contents}", contents);
         }
         else
         {
-            _logger.LogTrace("{StatusCode}\nRequest: {@Request}\nResponse{@Response}", response.StatusCode, request, response);
+            _logger.LogTrace("""
+                {StatusCode}
+                Request: {@Request}
+                Response: {@Response}
+                """, response.StatusCode, request, response);
+                
         }
 
 
@@ -249,7 +250,11 @@ public abstract class PdsrClientBase : IPdsrClientBase
             var retryRequest = Extensions.HttpRequestMessageExtensions.Clone(request);
 
             _logger.LogInformation("Retrying the Request {Url}, retries remained: {Retries}", retryRequest.RequestUri, _retryCount - 1);
-            _logger.LogDebug("Retrying the Request, retries count remained: {Retries}, previous status was: {StatusCode}\nRequest:{@Request}\nResponse: {@response}", _retryCount - 1, response.StatusCode, request, response);
+            _logger.LogDebug("""
+                Retrying the Request, retries count remained: {Retries}, previous status was: {StatusCode}
+                Request: {@Request}
+                Response: {@Response}
+                """, _retryCount - 1, response.StatusCode, request, response);
 
             // indicate that the consequent requests would be retries.
             _isRetrying = true;
@@ -264,6 +269,13 @@ public abstract class PdsrClientBase : IPdsrClientBase
             // <-- retry
 
             return response;
+        }
+
+        if (!response.IsSuccessStatusCode && EnsureSuccess)
+        {
+            throw new HttpRequestException(
+               string.Format("Response status code does not indicate success: {0} ({1})", response.StatusCode, response.ReasonPhrase)
+               , inner: null);
         }
 
         ClearConfigs();
@@ -339,6 +351,8 @@ public abstract class PdsrClientBase : IPdsrClientBase
         HandleExceptionAsync = null;
         HandleStatusCodeBase = null;
         RequestUrlPath = string.Empty;
+        QueryParameters.Clear();
+        EnsureSuccess = false;
     }
 
     protected virtual async ValueTask<T?> Deserialize<T>(Stream stream, CancellationToken cancellationToken = default)
@@ -394,7 +408,7 @@ public abstract class PdsrClientBase : IPdsrClientBase
     /// <param name="response">Previously sent response</param>
     /// <param name="cancellationToken">Propagates notification that operations should be canceled.</param>
     /// <returns>Returns a boolean indicates if retry needs to be done or not.</returns>
-    protected virtual Task<bool> IsRetryRequired(HttpResponseMessage response, CancellationToken cancellationToken = default)
+    protected internal virtual Task<bool> IsRetryRequired(HttpResponseMessage response, CancellationToken cancellationToken = default)
     {
         return Task.FromResult(false);
     }
